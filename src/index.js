@@ -10,8 +10,8 @@ import { CustomError } from '#configs/error';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export async function buildApp() {
-  const fastify = Fastify({ logger: true });
+export async function buildApp(opts = {}) {
+  const fastify = Fastify({ logger: true, ...opts });
 
   fastify.decorate('container', buildContainer());
 
