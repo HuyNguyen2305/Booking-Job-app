@@ -1,0 +1,42 @@
+module.exports = {
+  workerOnePending: {
+    id: 1001,
+    worker_id: 501,
+    customer_id: 601,
+    start_time: '2026-08-01T09:00:00.000Z',
+    end_time: '2026-08-01T10:00:00.000Z',
+    status: 'PENDING',
+  },
+  workerOneConfirmed: {
+    id: 1002,
+    worker_id: 501,
+    customer_id: 602,
+    start_time: '2026-08-02T09:00:00.000Z',
+    end_time: '2026-08-02T10:00:00.000Z',
+    status: 'CONFIRMED',
+  },
+  workerOneCancelled: {
+    id: 1003,
+    worker_id: 501,
+    customer_id: 603,
+    start_time: '2026-08-01T09:00:00.000Z',
+    end_time: '2026-08-01T10:00:00.000Z',
+    status: 'CANCELLED',
+  },
+  workerOneLater: {
+    id: 1004,
+    worker_id: 501,
+    customer_id: 604,
+    start_time: '2026-08-03T09:00:00.000Z',
+    end_time: '2026-08-03T10:00:00.000Z',
+    status: 'PENDING',
+  },
+  workerTwoPending: {
+    id: 1005,
+    worker_id: 502,
+    customer_id: 601,
+    start_time: '2026-08-01T09:00:00.000Z',
+    end_time: '2026-08-01T10:00:00.000Z',
+    status: 'PENDING',
+  },
+};
