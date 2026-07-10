@@ -13,6 +13,15 @@ const bookingSchema = {
   },
 };
 
+const bookingWithAssignmentSchema = {
+  type: 'object',
+  properties: {
+    ...bookingSchema.properties,
+    reassigned: { type: 'boolean' },
+    requested_worker_id: { type: 'integer' },
+  },
+};
+
 export const createBookingSchema = {
   tags: ['Bookings'],
   summary: 'Create a booking',
@@ -29,7 +38,32 @@ export const createBookingSchema = {
     },
   },
   response: {
-    201: buildSuccessResponse(bookingSchema),
+    201: buildSuccessResponse(bookingWithAssignmentSchema),
+  },
+};
+
+export const rescheduleBookingSchema = {
+  tags: ['Bookings'],
+  summary: 'Reschedule a booking',
+  description:
+    'Changes start_time/end_time on an existing PENDING or CONFIRMED booking. Re-runs the same weekday/business-hours/holiday/overlap checks as creation, with automatic fallback to another worker if the current one is no longer free.',
+  params: {
+    type: 'object',
+    required: ['id'],
+    properties: {
+      id: { type: 'integer' },
+    },
+  },
+  body: {
+    type: 'object',
+    required: ['start_time', 'end_time'],
+    properties: {
+      start_time: { type: 'string', format: 'date-time' },
+      end_time: { type: 'string', format: 'date-time' },
+    },
+  },
+  response: {
+    200: buildSuccessResponse(bookingWithAssignmentSchema),
   },
 };
 

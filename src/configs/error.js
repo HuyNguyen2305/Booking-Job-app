@@ -4,6 +4,8 @@ export class CustomError extends Error {
     this.name = 'CustomError';
     this.statusCode = statusCode;
     this.errors = options.errors;
+    this.code = options.code;
+    this.data = options.data;
   }
 }
 

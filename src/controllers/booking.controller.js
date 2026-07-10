@@ -15,6 +15,11 @@ export class BookingController {
     return reply.send({ success: true, message: 'Booking status updated', data: booking });
   }
 
+  async reschedule(request, reply) {
+    const booking = await this.bookingService.rescheduleBooking(Number(request.params.id), request.body);
+    return reply.send({ success: true, message: 'Booking rescheduled', data: booking });
+  }
+
   async list(request, reply) {
     const { worker_id, from, to } = request.query;
     const bookings = await this.bookingService.listByWorker(worker_id, { from, to });

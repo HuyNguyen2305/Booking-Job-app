@@ -1,8 +1,15 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 
 const bookingRepositoryMock = {
-  findOverlappingForWorker: jest.fn(),
   create: jest.fn(),
+};
+const workerRepositoryMock = {
+  listActive: jest.fn(),
+  getAvailability: jest.fn(),
+};
+const bookingAvailabilityServiceMock = {
+  checkSlotRules: jest.fn(),
+  isWorkerFree: jest.fn(),
 };
 
 const sequelizeMock = {
@@ -14,6 +21,7 @@ jest.unstable_mockModule('#models/index', () => ({ sequelize: sequelizeMock }));
 const { BookingService } = await import('#services/booking.service');
 const { ValidationError, ConflictError } = await import('#configs/error');
 const { BOOKING_STATUS } = await import('#constants/booking-status.const');
+const { BOOKING_ERROR_CODES } = await import('#constants/error-codes.const');
 
 describe('BookingService.createBooking', () => {
   let service;
@@ -21,55 +29,127 @@ describe('BookingService.createBooking', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     sequelizeMock.transaction.mockImplementation((callback) => callback('mock-transaction'));
+    workerRepositoryMock.listActive.mockResolvedValue([]);
+    bookingAvailabilityServiceMock.checkSlotRules.mockResolvedValue({ ok: true });
+
     service = Object.create(BookingService.prototype);
     service.bookingRepository = bookingRepositoryMock;
+    service.workerRepository = workerRepositoryMock;
+    service.bookingAvailabilityService = bookingAvailabilityServiceMock;
   });
 
   const payload = {
     worker_id: 1,
     customer_id: 2,
-    start_time: '2026-07-09T09:00:00.000Z',
-    end_time: '2026-07-09T09:30:00.000Z',
+    start_time: '2026-07-14T09:00:00+07:00',
+    end_time: '2026-07-14T09:30:00+07:00',
   };
 
   it('throws ValidationError when end_time is less than 30 minutes after start_time', async () => {
-    const invalidPayload = { ...payload, end_time: '2026-07-09T09:29:59.000Z' };
+    await expect(
+      service.createBooking({ ...payload, end_time: '2026-07-14T09:29:00+07:00' })
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(bookingAvailabilityServiceMock.checkSlotRules).not.toHaveBeenCalled();
+  });
 
-    await expect(service.createBooking(invalidPayload)).rejects.toThrow(ValidationError);
-    expect(bookingRepositoryMock.findOverlappingForWorker).not.toHaveBeenCalled();
+  it('throws with the slot-rule code when checkSlotRules rejects the window', async () => {
+    bookingAvailabilityServiceMock.checkSlotRules.mockResolvedValue({
+      ok: false,
+      code: BOOKING_ERROR_CODES.OUTSIDE_BUSINESS_HOURS,
+    });
+
+    await expect(service.createBooking(payload)).rejects.toMatchObject({
+      code: BOOKING_ERROR_CODES.OUTSIDE_BUSINESS_HOURS,
+    });
     expect(bookingRepositoryMock.create).not.toHaveBeenCalled();
   });
 
-  it('throws ConflictError when the worker already has an overlapping booking', async () => {
-    bookingRepositoryMock.findOverlappingForWorker.mockResolvedValue({ id: 99 });
-
-    await expect(service.createBooking(payload)).rejects.toThrow(ConflictError);
-    expect(bookingRepositoryMock.findOverlappingForWorker).toHaveBeenCalledWith(
-      payload.worker_id,
-      payload.start_time,
-      payload.end_time,
-      { transaction: 'mock-transaction' }
-    );
-    expect(bookingRepositoryMock.create).not.toHaveBeenCalled();
-  });
-
-  it('creates the booking with PENDING status when duration is valid and there is no overlap', async () => {
-    bookingRepositoryMock.findOverlappingForWorker.mockResolvedValue(null);
-    const createdBooking = { id: 1, ...payload, status: BOOKING_STATUS.PENDING };
+  it('books the requested worker when they are free (no reassignment)', async () => {
+    workerRepositoryMock.listActive.mockResolvedValue([{ id: 1 }]);
+    bookingAvailabilityServiceMock.isWorkerFree.mockResolvedValue(true);
+    const createdBooking = { toJSON: () => ({ id: 1, ...payload, status: BOOKING_STATUS.PENDING }) };
     bookingRepositoryMock.create.mockResolvedValue(createdBooking);
 
     const result = await service.createBooking(payload);
 
     expect(bookingRepositoryMock.create).toHaveBeenCalledWith(
-      {
-        worker_id: payload.worker_id,
-        customer_id: payload.customer_id,
-        start_time: payload.start_time,
-        end_time: payload.end_time,
-        status: BOOKING_STATUS.PENDING,
-      },
+      expect.objectContaining({ worker_id: 1, status: BOOKING_STATUS.PENDING }),
       { transaction: 'mock-transaction' }
     );
-    expect(result).toBe(createdBooking);
+    expect(result.reassigned).toBe(false);
+    expect(result.requested_worker_id).toBeUndefined();
+  });
+
+  it('throws ConflictError with WORKER_UNAVAILABLE when the requested worker_id is not a registered active worker and no other active workers exist', async () => {
+    // Regression: the workers table is empty (e.g. right after a fresh migration or a
+    // truncate), yet the client requests worker_id: 1. Must NOT silently create a
+    // booking for a worker_id that was never registered just because no overlapping
+    // booking happens to exist yet for that id.
+    workerRepositoryMock.listActive.mockResolvedValue([]);
+
+    await expect(service.createBooking(payload)).rejects.toMatchObject({
+      code: BOOKING_ERROR_CODES.WORKER_UNAVAILABLE,
+    });
+    expect(bookingAvailabilityServiceMock.isWorkerFree).not.toHaveBeenCalled();
+    expect(bookingRepositoryMock.create).not.toHaveBeenCalled();
+  });
+
+  it('falls back to another active worker when the requested worker_id is not registered/active, without ever assigning the phantom id', async () => {
+    workerRepositoryMock.listActive.mockResolvedValue([{ id: 2 }]);
+    workerRepositoryMock.getAvailability.mockResolvedValue([{ worker_id: 2, has_overlap: false, booked_hours: 0 }]);
+    bookingAvailabilityServiceMock.isWorkerFree.mockResolvedValue(true);
+    const createdBooking = { toJSON: () => ({ id: 3, ...payload, worker_id: 2, status: BOOKING_STATUS.PENDING }) };
+    bookingRepositoryMock.create.mockResolvedValue(createdBooking);
+
+    const result = await service.createBooking(payload); // payload requests worker_id: 1, which isn't in the active roster
+
+    expect(bookingAvailabilityServiceMock.isWorkerFree).not.toHaveBeenCalledWith(1, expect.anything(), expect.anything(), expect.anything());
+    expect(bookingRepositoryMock.create).toHaveBeenCalledWith(expect.objectContaining({ worker_id: 2 }), expect.anything());
+    expect(result.reassigned).toBe(true);
+    expect(result.requested_worker_id).toBe(1);
+  });
+
+  it('falls back to another active worker when the requested one is busy', async () => {
+    workerRepositoryMock.listActive.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+    workerRepositoryMock.getAvailability.mockResolvedValue([{ worker_id: 2, has_overlap: false, booked_hours: 3 }]);
+    bookingAvailabilityServiceMock.isWorkerFree.mockImplementation(async (candidateId) => candidateId === 2);
+    const createdBooking = { toJSON: () => ({ id: 5, ...payload, worker_id: 2, status: BOOKING_STATUS.PENDING }) };
+    bookingRepositoryMock.create.mockResolvedValue(createdBooking);
+
+    const result = await service.createBooking(payload);
+
+    expect(bookingRepositoryMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ worker_id: 2 }),
+      expect.anything()
+    );
+    expect(result.reassigned).toBe(true);
+    expect(result.requested_worker_id).toBe(1);
+  });
+
+  it('throws ConflictError with WORKER_UNAVAILABLE when every candidate is busy', async () => {
+    workerRepositoryMock.listActive.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+    workerRepositoryMock.getAvailability.mockResolvedValue([{ worker_id: 2, has_overlap: false, booked_hours: 0 }]);
+    bookingAvailabilityServiceMock.isWorkerFree.mockResolvedValue(false);
+
+    await expect(service.createBooking(payload)).rejects.toBeInstanceOf(ConflictError);
+    await expect(service.createBooking(payload)).rejects.toMatchObject({
+      code: BOOKING_ERROR_CODES.WORKER_UNAVAILABLE,
+    });
+    expect(bookingRepositoryMock.create).not.toHaveBeenCalled();
+  });
+
+  it('moves to the next candidate when create() loses a race (exclusion constraint violation)', async () => {
+    workerRepositoryMock.listActive.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+    workerRepositoryMock.getAvailability.mockResolvedValue([{ worker_id: 2, has_overlap: false, booked_hours: 0 }]);
+    bookingAvailabilityServiceMock.isWorkerFree.mockResolvedValue(true);
+
+    const exclusionError = Object.assign(new Error('exclusion violation'), { parent: { code: '23P01' } });
+    const createdBooking = { toJSON: () => ({ id: 9, ...payload, worker_id: 2, status: BOOKING_STATUS.PENDING }) };
+    bookingRepositoryMock.create.mockRejectedValueOnce(exclusionError).mockResolvedValueOnce(createdBooking);
+
+    const result = await service.createBooking(payload);
+
+    expect(bookingRepositoryMock.create).toHaveBeenCalledTimes(2);
+    expect(result.reassigned).toBe(true);
   });
 });

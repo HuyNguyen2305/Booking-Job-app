@@ -1,5 +1,10 @@
 import { CONTROLLER_KEYS } from '#constants/singleton';
-import { createBookingSchema, updateBookingStatusSchema, listBookingsSchema } from '#schemas/booking.schema';
+import {
+  createBookingSchema,
+  updateBookingStatusSchema,
+  rescheduleBookingSchema,
+  listBookingsSchema,
+} from '#schemas/booking.schema';
 
 class BookingRouter {
   constructor(fastify) {
@@ -22,6 +27,14 @@ class BookingRouter {
       schema: updateBookingStatusSchema,
       config: { responseFormat: 'standard' },
       handler: this.bookingController.updateStatus.bind(this.bookingController),
+    });
+
+    this.fastify.route({
+      method: 'PATCH',
+      url: '/api/bookings/:id',
+      schema: rescheduleBookingSchema,
+      config: { responseFormat: 'standard' },
+      handler: this.bookingController.reschedule.bind(this.bookingController),
     });
 
     this.fastify.route({

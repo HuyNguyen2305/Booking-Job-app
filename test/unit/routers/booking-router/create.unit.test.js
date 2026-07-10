@@ -16,6 +16,7 @@ jest.unstable_mockModule('#services/booking.service', () => ({ BookingService: M
 
 const { buildApp } = await import('#src/index');
 const { ValidationError, ConflictError } = await import('#configs/error');
+const { BOOKING_ERROR_CODES } = await import('#constants/error-codes.const');
 
 describe('POST /api/bookings (router + controller + error handler)', () => {
   let app;
@@ -49,6 +50,29 @@ describe('POST /api/bookings (router + controller + error handler)', () => {
     expect(response.statusCode).toBe(201);
     expect(response.json()).toEqual({ success: true, message: 'Booking created', data: createdBooking });
     expect(bookingServiceMock.createBooking).toHaveBeenCalledWith(validPayload);
+  });
+
+  it('returns 201 with reassigned/requested_worker_id when the service auto-assigned a different worker', async () => {
+    const createdBooking = { id: 1, ...validPayload, worker_id: 5, status: 'PENDING', reassigned: true, requested_worker_id: 1 };
+    bookingServiceMock.createBooking.mockResolvedValue(createdBooking);
+
+    const response = await app.inject({ method: 'POST', url: '/api/bookings', payload: validPayload });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json().data).toEqual(createdBooking);
+  });
+
+  it('returns 400 with code INVALID_TIMESTAMP_FORMAT when the service rejects a missing-offset timestamp', async () => {
+    bookingServiceMock.createBooking.mockRejectedValue(
+      new ValidationError('start_time must be an ISO 8601 date-time with an explicit UTC offset', {
+        code: BOOKING_ERROR_CODES.INVALID_TIMESTAMP_FORMAT,
+      })
+    );
+
+    const response = await app.inject({ method: 'POST', url: '/api/bookings', payload: validPayload });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ success: false, code: BOOKING_ERROR_CODES.INVALID_TIMESTAMP_FORMAT });
   });
 
   it('returns 400 in the custom error shape when the service throws ValidationError', async () => {
