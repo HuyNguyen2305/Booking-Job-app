@@ -1,7 +1,7 @@
 import { Op } from 'sequelize';
 import { BaseRepository } from '#src/common/base/base.repository';
 import { Booking } from '#models/booking.model';
-import { ACTIVE_BOOKING_STATUSES } from '#constants/booking-status.const';
+import { OCCUPIED_BOOKING_STATUSES } from '#constants/booking-status.const';
 
 export class BookingRepository extends BaseRepository {
   constructor() {
@@ -11,7 +11,7 @@ export class BookingRepository extends BaseRepository {
   async findOverlappingForWorker(workerId, startTime, endTime, { excludeId, transaction } = {}) {
     const where = {
       worker_id: workerId,
-      status: { [Op.in]: ACTIVE_BOOKING_STATUSES },
+      status: { [Op.in]: OCCUPIED_BOOKING_STATUSES },
       start_time: { [Op.lt]: endTime },
       end_time: { [Op.gt]: startTime },
     };

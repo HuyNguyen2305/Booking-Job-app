@@ -43,6 +43,24 @@ describe('BookingRepository.findOverlappingForWorker (integration)', () => {
     });
   });
 
+  it('detects overlap with an existing COMPLETED booking for the same worker (that time already happened)', async () => {
+    // Regression: COMPLETED must still block overlap detection — the job genuinely
+    // occupied that slot. Previously ACTIVE_BOOKING_STATUSES excluded COMPLETED here,
+    // letting a new booking be created for a slot that was already worked.
+    const ctx = await seedWithTransaction([{ table: 'bookings', rows: [fixtures.workerOneCompleted] }]);
+    rollback = ctx.rollback;
+
+    await ctx.run(async (transaction) => {
+      const overlap = await repository.findOverlappingForWorker(
+        fixtures.workerOneCompleted.worker_id,
+        '2026-08-04T09:30:00.000Z',
+        '2026-08-04T10:30:00.000Z',
+        { transaction }
+      );
+      expect(overlap).not.toBeNull();
+    });
+  });
+
   it('ignores a CANCELLED booking occupying the same range (no false positive)', async () => {
     const ctx = await seedWithTransaction([{ table: 'bookings', rows: [fixtures.workerOneCancelled] }]);
     rollback = ctx.rollback;

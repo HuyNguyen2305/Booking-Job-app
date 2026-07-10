@@ -37,6 +37,22 @@ describe('WorkerRepository.getAvailability (integration)', () => {
       end_time: '2026-07-14T15:00:00+07:00',
       status: 'CONFIRMED',
     },
+    {
+      id: 8103,
+      worker_id: 7004,
+      customer_id: 1,
+      start_time: '2026-07-14T10:00:00+07:00',
+      end_time: '2026-07-14T13:00:00+07:00',
+      status: 'COMPLETED',
+    },
+    {
+      id: 8104,
+      worker_id: 7005,
+      customer_id: 1,
+      start_time: '2026-07-14T10:00:00+07:00',
+      end_time: '2026-07-14T13:00:00+07:00',
+      status: 'CANCELLED',
+    },
   ];
 
   it('flags overlapping workers, sums booked hours for the day, and includes zero-booking workers', async () => {
@@ -57,6 +73,29 @@ describe('WorkerRepository.getAvailability (integration)', () => {
       expect(byWorker[7001]).toEqual({ worker_id: 7001, has_overlap: true, booked_hours: 1 });
       expect(byWorker[7002]).toEqual({ worker_id: 7002, has_overlap: false, booked_hours: 1 });
       expect(byWorker[7003]).toEqual({ worker_id: 7003, has_overlap: false, booked_hours: 0 });
+    });
+  });
+
+  it('counts a COMPLETED booking toward overlap and booked hours (that time already happened), but ignores CANCELLED', async () => {
+    // Regression: COMPLETED was previously excluded alongside CANCELLED, so a worker
+    // fully booked with now-COMPLETED jobs incorrectly showed 0 booked_hours and no
+    // overlap, making them appear available for a slot they'd actually worked.
+    const ctx = await seedWithTransaction([
+      { table: 'workers', rows: workerFixtures.workers },
+      { table: 'bookings', rows: bookingRows },
+    ]);
+    rollback = ctx.rollback;
+
+    await ctx.run(async (transaction) => {
+      const rows = await repository.getAvailability(
+        [7004, 7005],
+        { ...queryWindow, ...dayBounds },
+        { transaction }
+      );
+
+      const byWorker = Object.fromEntries(rows.map((r) => [r.worker_id, r]));
+      expect(byWorker[7004]).toEqual({ worker_id: 7004, has_overlap: true, booked_hours: 3 });
+      expect(byWorker[7005]).toEqual({ worker_id: 7005, has_overlap: false, booked_hours: 0 });
     });
   });
 

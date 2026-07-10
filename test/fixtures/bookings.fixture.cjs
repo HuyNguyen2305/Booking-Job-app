@@ -23,6 +23,14 @@ module.exports = {
     end_time: '2026-08-01T10:00:00.000Z',
     status: 'CANCELLED',
   },
+  workerOneCompleted: {
+    id: 1006,
+    worker_id: 501,
+    customer_id: 605,
+    start_time: '2026-08-04T09:00:00.000Z',
+    end_time: '2026-08-04T10:00:00.000Z',
+    status: 'COMPLETED',
+  },
   workerOneLater: {
     id: 1004,
     worker_id: 501,
