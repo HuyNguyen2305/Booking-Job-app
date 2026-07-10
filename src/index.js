@@ -29,6 +29,13 @@ export async function buildApp(opts = {}) {
       });
     }
     request.log.error(error);
+    // Framework-level errors (e.g. Fastify's own malformed-JSON body parser) carry a
+    // genuine 4xx statusCode of their own; only truly unexpected errors (no statusCode,
+    // or a 5xx) should be collapsed into a generic, message-hiding 500.
+    const isClientError = Number.isInteger(error.statusCode) && error.statusCode >= 400 && error.statusCode < 500;
+    if (isClientError) {
+      return reply.status(error.statusCode).send({ success: false, message: error.message });
+    }
     return reply.status(500).send({ success: false, message: 'Internal server error' });
   });
 
