@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from '@jest/globals';
-import { Op } from 'sequelize';
+import { describe, it, expect, afterEach, beforeAll } from '@jest/globals';
+import { nextTuesdayAt } from '#test/helpers/future-dates.js';
 
 const { BookingRepository } = await import('#repositories/booking.repository');
 const { WorkerRepository } = await import('#repositories/worker.repository');
@@ -21,6 +21,16 @@ const { isExclusionConstraintError } = await import('#utils/sequelize-error.util
 describe('BookingService.reassignBooking (integration)', () => {
   let workerIds = [];
   let bookingIds = [];
+  // Snapshotted once, before any test in this file creates its own temporary workers —
+  // see the identical comment in worker-service/update-status.integration.test.js for why:
+  // this stops this file's blocking helper from ever racing with that other integration
+  // test file's own identical helper over each other's freshly-created workers.
+  let preExistingActiveWorkerIds = [];
+
+  beforeAll(async () => {
+    const preExisting = await Worker.findAll({ where: { is_active: true }, attributes: ['id'] });
+    preExistingActiveWorkerIds = preExisting.map((w) => w.id);
+  });
 
   afterEach(async () => {
     if (bookingIds.length) {
@@ -51,10 +61,10 @@ describe('BookingService.reassignBooking (integration)', () => {
   }
 
   async function blockOtherActiveWorkers(excludeIds, slot) {
-    const others = await Worker.findAll({ where: { is_active: true, id: { [Op.notIn]: excludeIds } } });
-    for (const worker of others) {
+    const targetIds = preExistingActiveWorkerIds.filter((id) => !excludeIds.includes(id));
+    for (const workerId of targetIds) {
       try {
-        const blocker = await Booking.create({ worker_id: worker.id, customer_id: 999, ...slot, status: 'CONFIRMED' });
+        const blocker = await Booking.create({ worker_id: workerId, customer_id: 999, ...slot, status: 'CONFIRMED' });
         bookingIds.push(blocker.id);
       } catch (err) {
         if (!isExclusionConstraintError(err)) throw err;
@@ -67,7 +77,7 @@ describe('BookingService.reassignBooking (integration)', () => {
     const workerB = await Worker.create({ name: 'Free Worker', is_active: true });
     workerIds.push(workerA.id, workerB.id);
 
-    const slot = { start_time: '2026-07-14T14:36:00+07:00', end_time: '2026-07-14T15:02:00+07:00' };
+    const slot = { start_time: nextTuesdayAt(14, 36), end_time: nextTuesdayAt(15, 2) };
     await blockOtherActiveWorkers([workerA.id, workerB.id], slot);
 
     const booking = await Booking.create({ worker_id: workerA.id, customer_id: 1, ...slot, status: 'PENDING' });
@@ -89,7 +99,7 @@ describe('BookingService.reassignBooking (integration)', () => {
     const workerA = await Worker.create({ name: 'Only Worker', is_active: true });
     workerIds.push(workerA.id);
 
-    const slot = { start_time: '2026-07-14T16:11:00+07:00', end_time: '2026-07-14T16:40:00+07:00' };
+    const slot = { start_time: nextTuesdayAt(16, 11), end_time: nextTuesdayAt(16, 40) };
     await blockOtherActiveWorkers([workerA.id], slot);
 
     const booking = await Booking.create({ worker_id: workerA.id, customer_id: 1, ...slot, status: 'CONFIRMED' });
@@ -111,7 +121,7 @@ describe('BookingService.reassignBooking (integration)', () => {
     const workerB = await Worker.create({ name: 'Newly Free Worker', is_active: true });
     workerIds.push(workerA.id, workerB.id);
 
-    const slot = { start_time: '2026-07-14T16:05:00+07:00', end_time: '2026-07-14T16:33:00+07:00' };
+    const slot = { start_time: nextTuesdayAt(16, 5), end_time: nextTuesdayAt(16, 33) };
     await blockOtherActiveWorkers([workerA.id, workerB.id], slot);
 
     const booking = await Booking.create({ worker_id: workerA.id, customer_id: 1, ...slot, status: 'PENDING' });

@@ -1,5 +1,6 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { DateTime } from 'luxon';
+import { nextTuesdayAt, nextSaturdayAt } from '#test/helpers/future-dates.js';
 
 process.env.BUSINESS_TZ = 'Asia/Ho_Chi_Minh';
 
@@ -41,43 +42,47 @@ describe('BookingAvailabilityService.checkSlotRules', () => {
   });
 
   it('rejects a start time before 09:00 local with OUTSIDE_BUSINESS_HOURS', async () => {
-    const result = await service.checkSlotRules('2026-07-14T08:59:00+07:00', '2026-07-14T09:29:00+07:00');
+    const result = await service.checkSlotRules(nextTuesdayAt(8, 59), nextTuesdayAt(9, 29));
     expect(result).toEqual({ ok: false, code: BOOKING_ERROR_CODES.OUTSIDE_BUSINESS_HOURS });
   });
 
   it('rejects an end time after 17:00 local with OUTSIDE_BUSINESS_HOURS', async () => {
-    const result = await service.checkSlotRules('2026-07-14T16:45:00+07:00', '2026-07-14T17:15:00+07:00');
+    const result = await service.checkSlotRules(nextTuesdayAt(16, 45), nextTuesdayAt(17, 15));
     expect(result).toEqual({ ok: false, code: BOOKING_ERROR_CODES.OUTSIDE_BUSINESS_HOURS });
   });
 
   it('rejects a Saturday booking with NON_WEEKDAY_BOOKING', async () => {
-    const result = await service.checkSlotRules('2026-07-18T10:00:00+07:00', '2026-07-18T10:30:00+07:00');
+    const result = await service.checkSlotRules(nextSaturdayAt(10, 0), nextSaturdayAt(10, 30));
     expect(result).toEqual({ ok: false, code: BOOKING_ERROR_CODES.NON_WEEKDAY_BOOKING });
   });
 
   it('rejects a date present in the holidays table with HOLIDAY_CLOSURE', async () => {
     holidayRepositoryMock.existsOnLocalDate.mockResolvedValue(true);
-    const result = await service.checkSlotRules('2026-07-14T10:00:00+07:00', '2026-07-14T10:30:00+07:00');
+    const start = nextTuesdayAt(10, 0);
+    const end = nextTuesdayAt(10, 30);
+    const expectedDate = DateTime.fromISO(start).toISODate();
+
+    const result = await service.checkSlotRules(start, end);
     expect(result).toEqual({ ok: false, code: BOOKING_ERROR_CODES.HOLIDAY_CLOSURE });
-    expect(holidayRepositoryMock.existsOnLocalDate).toHaveBeenCalledWith('2026-07-14', { transaction: undefined });
+    expect(holidayRepositoryMock.existsOnLocalDate).toHaveBeenCalledWith(expectedDate, { transaction: undefined });
   });
 
   it('returns ok:true for a weekday, in-hours, non-holiday slot', async () => {
-    const result = await service.checkSlotRules('2026-07-14T10:00:00+07:00', '2026-07-14T10:30:00+07:00');
+    const result = await service.checkSlotRules(nextTuesdayAt(10, 0), nextTuesdayAt(10, 30));
     expect(result).toEqual({ ok: true });
   });
 
   it('throws ValidationError with INVALID_TIMESTAMP_FORMAT when start_time has no UTC offset', async () => {
-    await expect(service.checkSlotRules('2026-07-14T10:00:00', '2026-07-14T10:30:00+07:00')).rejects.toMatchObject({
+    await expect(service.checkSlotRules('2026-07-14T10:00:00', nextTuesdayAt(10, 30))).rejects.toMatchObject({
       code: BOOKING_ERROR_CODES.INVALID_TIMESTAMP_FORMAT,
     });
-    await expect(service.checkSlotRules('2026-07-14T10:00:00', '2026-07-14T10:30:00+07:00')).rejects.toBeInstanceOf(
+    await expect(service.checkSlotRules('2026-07-14T10:00:00', nextTuesdayAt(10, 30))).rejects.toBeInstanceOf(
       ValidationError
     );
   });
 
   it('throws ValidationError with INVALID_TIMESTAMP_FORMAT when end_time has no UTC offset', async () => {
-    await expect(service.checkSlotRules('2026-07-14T10:00:00+07:00', '2026-07-14T10:30:00')).rejects.toMatchObject({
+    await expect(service.checkSlotRules(nextTuesdayAt(10, 0), '2026-07-14T10:30:00')).rejects.toMatchObject({
       code: BOOKING_ERROR_CODES.INVALID_TIMESTAMP_FORMAT,
     });
   });

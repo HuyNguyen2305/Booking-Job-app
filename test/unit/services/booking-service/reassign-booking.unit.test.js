@@ -1,4 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import { DateTime } from 'luxon';
 
 process.env.BUSINESS_TZ = 'Asia/Ho_Chi_Minh';
 
@@ -28,8 +29,12 @@ const { BOOKING_ERROR_CODES } = await import('#constants/error-codes.const');
 describe('BookingService.reassignBooking', () => {
   let service;
 
-  // Fixed far-future slot so this stays a valid "not yet passed" booking indefinitely.
-  const slot = { start_time: new Date('2099-07-14T09:00:00+07:00'), end_time: new Date('2099-07-14T09:30:00+07:00') };
+  // Computed relative to the real clock (not a hardcoded date) so this stays a valid
+  // "not yet passed" booking indefinitely.
+  const slot = {
+    start_time: DateTime.now().plus({ days: 30 }).toJSDate(),
+    end_time: DateTime.now().plus({ days: 30 }).plus({ minutes: 30 }).toJSDate(),
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();

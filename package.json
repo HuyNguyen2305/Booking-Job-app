@@ -24,7 +24,7 @@
     "dev": "node --watch src/index.js",
     "migrate": "node scripts/migrate.js up",
     "migrate:down": "node scripts/migrate.js down",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
     "test:unit": "npm test -- test/unit",
     "test:integration": "npm test -- test/integration"
   },

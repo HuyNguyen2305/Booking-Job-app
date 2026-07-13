@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from '@jest/globals';
-import { Op } from 'sequelize';
+import { describe, it, expect, afterEach, beforeAll } from '@jest/globals';
+import { nextTuesdayAt } from '#test/helpers/future-dates.js';
 
 const { BookingRepository } = await import('#repositories/booking.repository');
 const { WorkerRepository } = await import('#repositories/worker.repository');
@@ -27,6 +27,19 @@ const { isExclusionConstraintError } = await import('#utils/sequelize-error.util
 describe('WorkerService.updateStatus deactivation flow (integration)', () => {
   let workerIds = [];
   let bookingIds = [];
+  // Snapshotted once, before any test in this file creates its own temporary workers —
+  // this is what stops this file's blocking helper from ever touching a worker that
+  // another integration test file (running concurrently in a different Jest worker
+  // process, against the same live dev DB) creates mid-run. Blocking against a live
+  // Worker.findAll() query would otherwise race with e.g. reassign-booking.integration.test.js
+  // doing the exact same thing, occasionally attaching a stray booking to this file's
+  // freshly-created worker moments before it's used.
+  let preExistingActiveWorkerIds = [];
+
+  beforeAll(async () => {
+    const preExisting = await Worker.findAll({ where: { is_active: true }, attributes: ['id'] });
+    preExistingActiveWorkerIds = preExisting.map((w) => w.id);
+  });
 
   afterEach(async () => {
     if (bookingIds.length) {
@@ -61,16 +74,16 @@ describe('WorkerService.updateStatus deactivation flow (integration)', () => {
   }
 
   /**
-   * Occupies every currently-active worker except `excludeIds` for `slot`, so none of
-   * them can be offered as a replacement. If a worker already has a conflicting booking
-   * at that slot (real leftover data), the EXCLUDE constraint rejects our insert — that's
-   * fine, it means they're already blocked, so we just skip them instead of failing.
+   * Occupies every worker that was active BEFORE this file started running (real
+   * leftover manual-test data), except `excludeIds`, so none of them can be offered as
+   * a replacement. If one already has a conflicting booking at that slot, the EXCLUDE
+   * constraint rejects our insert — that's fine, it means they're already blocked.
    */
   async function blockOtherActiveWorkers(excludeIds, slot) {
-    const others = await Worker.findAll({ where: { is_active: true, id: { [Op.notIn]: excludeIds } } });
-    for (const worker of others) {
+    const targetIds = preExistingActiveWorkerIds.filter((id) => !excludeIds.includes(id));
+    for (const workerId of targetIds) {
       try {
-        const blocker = await Booking.create({ worker_id: worker.id, customer_id: 999, ...slot, status: 'CONFIRMED' });
+        const blocker = await Booking.create({ worker_id: workerId, customer_id: 999, ...slot, status: 'CONFIRMED' });
         bookingIds.push(blocker.id);
       } catch (err) {
         if (!isExclusionConstraintError(err)) throw err;
@@ -83,7 +96,7 @@ describe('WorkerService.updateStatus deactivation flow (integration)', () => {
     const workerB = await Worker.create({ name: 'Backup Worker', is_active: true });
     workerIds.push(workerA.id, workerB.id);
 
-    const slot = { start_time: '2026-07-14T09:41:00+07:00', end_time: '2026-07-14T10:07:00+07:00' };
+    const slot = { start_time: nextTuesdayAt(9, 41), end_time: nextTuesdayAt(10, 7) };
     await blockOtherActiveWorkers([workerA.id, workerB.id], slot);
 
     const booking = await Booking.create({ worker_id: workerA.id, customer_id: 1, ...slot, status: 'PENDING' });
@@ -106,7 +119,7 @@ describe('WorkerService.updateStatus deactivation flow (integration)', () => {
     const workerA = await Worker.create({ name: 'Deactivate Me Alone', is_active: true });
     workerIds.push(workerA.id);
 
-    const slot = { start_time: '2026-07-14T13:23:00+07:00', end_time: '2026-07-14T13:52:00+07:00' };
+    const slot = { start_time: nextTuesdayAt(13, 23), end_time: nextTuesdayAt(13, 52) };
     await blockOtherActiveWorkers([workerA.id], slot);
 
     const booking = await Booking.create({ worker_id: workerA.id, customer_id: 1, ...slot, status: 'CONFIRMED' });
@@ -133,8 +146,8 @@ describe('WorkerService.updateStatus deactivation flow (integration)', () => {
     const booking = await Booking.create({
       worker_id: workerA.id,
       customer_id: 1,
-      start_time: '2026-07-14T09:00:00+07:00',
-      end_time: '2026-07-14T09:30:00+07:00',
+      start_time: nextTuesdayAt(9, 0),
+      end_time: nextTuesdayAt(9, 30),
       status: 'COMPLETED',
     });
     bookingIds.push(booking.id);
