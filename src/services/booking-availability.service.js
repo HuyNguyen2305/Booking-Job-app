@@ -1,3 +1,4 @@
+import { DateTime } from 'luxon';
 import { REPOSITORY_KEYS } from '#constants/singleton';
 import { ValidationError } from '#configs/error';
 import { BOOKING_ERROR_CODES } from '#constants/error-codes.const';
@@ -22,12 +23,17 @@ export class BookingAvailabilityService {
   }
 
   /**
-   * Worker-independent checks: timestamp format, weekday, business hours, holiday.
-   * Called once per booking attempt regardless of how many candidate workers get tried.
+   * Worker-independent checks: timestamp format, not-in-the-past, weekday, business
+   * hours, holiday. Called once per booking attempt regardless of how many candidate
+   * workers get tried.
    */
   async checkSlotRules(startISO, endISO, { transaction } = {}) {
     const startLocal = this._parse(startISO, 'start_time').setZone(BUSINESS_TZ);
     const endLocal = this._parse(endISO, 'end_time').setZone(BUSINESS_TZ);
+
+    if (startLocal < DateTime.now()) {
+      return { ok: false, code: BOOKING_ERROR_CODES.PAST_BOOKING_TIME };
+    }
 
     if (startLocal.weekday > 5) {
       return { ok: false, code: BOOKING_ERROR_CODES.NON_WEEKDAY_BOOKING };

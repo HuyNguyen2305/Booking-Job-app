@@ -67,6 +67,23 @@ export const rescheduleBookingSchema = {
   },
 };
 
+export const reassignBookingSchema = {
+  tags: ['Bookings'],
+  summary: 'Move a booking to another available worker',
+  description:
+    'Moves an existing PENDING or CONFIRMED, not-yet-started booking off its current worker onto whichever other active worker is free for that same time slot — start_time/end_time are unchanged. Useful after a cancellation or new worker registration frees up capacity that was not available when a worker-deactivation attempt previously failed on this booking. The current worker is never offered back as its own replacement.',
+  params: {
+    type: 'object',
+    required: ['id'],
+    properties: {
+      id: { type: 'integer' },
+    },
+  },
+  response: {
+    200: buildSuccessResponse(bookingWithAssignmentSchema),
+  },
+};
+
 export const updateBookingStatusSchema = {
   tags: ['Bookings'],
   summary: 'Update a booking status',

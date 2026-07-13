@@ -3,6 +3,7 @@ import {
   createBookingSchema,
   updateBookingStatusSchema,
   rescheduleBookingSchema,
+  reassignBookingSchema,
   listBookingsSchema,
 } from '#schemas/booking.schema';
 
@@ -35,6 +36,14 @@ class BookingRouter {
       schema: rescheduleBookingSchema,
       config: { responseFormat: 'standard' },
       handler: this.bookingController.reschedule.bind(this.bookingController),
+    });
+
+    this.fastify.route({
+      method: 'PATCH',
+      url: '/api/bookings/:id/reassign',
+      schema: reassignBookingSchema,
+      config: { responseFormat: 'standard' },
+      handler: this.bookingController.reassign.bind(this.bookingController),
     });
 
     this.fastify.route({

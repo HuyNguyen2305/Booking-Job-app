@@ -9,6 +9,22 @@ const workerSchema = {
   },
 };
 
+const reassignedBookingSchema = {
+  type: 'object',
+  properties: {
+    booking_id: { type: 'integer' },
+    new_worker_id: { type: 'integer' },
+  },
+};
+
+const workerWithReassignmentsSchema = {
+  type: 'object',
+  properties: {
+    ...workerSchema.properties,
+    reassigned_bookings: { type: 'array', items: reassignedBookingSchema },
+  },
+};
+
 const availableWorkerSchema = {
   type: 'object',
   properties: {
@@ -55,5 +71,29 @@ export const listWorkersSchema = {
   summary: 'List all registered workers',
   response: {
     200: buildSuccessResponse({ type: 'array', items: workerSchema }),
+  },
+};
+
+export const updateWorkerStatusSchema = {
+  tags: ['Workers'],
+  summary: 'Activate or deactivate a worker',
+  description:
+    'Deactivating a worker first reassigns every still-open (PENDING/CONFIRMED), not-yet-started booking of theirs to another available active worker; if even one such booking has no available replacement, the whole request fails and the worker stays active. COMPLETED/CANCELLED bookings, and any PENDING/CONFIRMED booking whose time has already passed, are left untouched.',
+  params: {
+    type: 'object',
+    required: ['id'],
+    properties: {
+      id: { type: 'integer' },
+    },
+  },
+  body: {
+    type: 'object',
+    required: ['is_active'],
+    properties: {
+      is_active: { type: 'boolean' },
+    },
+  },
+  response: {
+    200: buildSuccessResponse(workerWithReassignmentsSchema),
   },
 };

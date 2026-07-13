@@ -20,4 +20,9 @@ export class WorkerController {
     const workers = await this.workerService.list();
     return reply.send({ success: true, message: [], data: workers });
   }
+
+  async updateStatus(request, reply) {
+    const worker = await this.workerService.updateStatus(Number(request.params.id), request.body.is_active);
+    return reply.send({ success: true, message: 'Worker status updated', data: worker });
+  }
 }

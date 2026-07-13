@@ -19,6 +19,7 @@ const SLOT_RULE_MESSAGES = {
   [BOOKING_ERROR_CODES.NON_WEEKDAY_BOOKING]: 'Bookings can only be made on weekdays (Mon-Fri)',
   [BOOKING_ERROR_CODES.OUTSIDE_BUSINESS_HOURS]: 'Bookings must fall within business hours (09:00-17:00)',
   [BOOKING_ERROR_CODES.HOLIDAY_CLOSURE]: 'Bookings cannot be made on a company holiday',
+  [BOOKING_ERROR_CODES.PAST_BOOKING_TIME]: 'Bookings cannot be made for a time that has already passed',
 };
 
 export class BookingService {
@@ -124,6 +125,54 @@ export class BookingService {
     return this.bookingRepository.listByWorker(workerId, { from, to });
   }
 
+  /**
+   * Manually moves one still-open, not-yet-started booking off its current worker onto
+   * whichever other active worker is now free for that same time slot — e.g. after a
+   * cancellation or a new registration frees up capacity that didn't exist when a
+   * worker-deactivation attempt previously failed on this exact booking. Does not touch
+   * start_time/end_time. The current worker is never offered back as its own replacement.
+   */
+  async reassignBooking(id) {
+    const booking = await this.bookingRepository.getOne({ where: { id } });
+    if (!booking) {
+      throw new NotFoundError('Booking not found');
+    }
+    if (!ACTIVE_BOOKING_STATUSES.includes(booking.status)) {
+      throw new ConflictError(`Cannot reassign a booking with status ${booking.status}`);
+    }
+
+    const startISO = booking.start_time.toISOString();
+    const endISO = booking.end_time.toISOString();
+    if (new Date(startISO) < new Date()) {
+      throw new ConflictError('Cannot reassign a booking whose time has already passed', {
+        code: BOOKING_ERROR_CODES.PAST_BOOKING_TIME,
+      });
+    }
+
+    const currentWorkerId = booking.worker_id;
+    const candidateIds = (await this._buildCandidateOrder(currentWorkerId, startISO, endISO)).filter(
+      (candidateId) => candidateId !== currentWorkerId
+    );
+
+    const result = await this._tryCandidates(candidateIds, async (candidateId, transaction) => {
+      const free = await this.bookingAvailabilityService.isWorkerFree(candidateId, startISO, endISO, {
+        transaction,
+        excludeId: id,
+      });
+      if (!free) throw SKIP_CANDIDATE;
+
+      const updated = await this.bookingRepository.update({ id }, { worker_id: candidateId }, { transaction });
+      return this._toAssignmentResult(updated, candidateId, currentWorkerId);
+    });
+
+    if (!result) {
+      throw new ConflictError('No worker is available to take over this booking', {
+        code: BOOKING_ERROR_CODES.WORKER_UNAVAILABLE,
+      });
+    }
+    return result;
+  }
+
   _toAssignmentResult(bookingInstance, assignedWorkerId, requestedWorkerId) {
     const reassigned = assignedWorkerId !== requestedWorkerId;
     return {
@@ -161,9 +210,11 @@ export class BookingService {
    * day's booked hours]. `primaryWorkerId` is only included if it's actually an active,
    * registered worker — a request for a nonexistent/inactive worker_id must not be
    * silently accepted just because no overlapping booking happens to exist for that id yet.
+   * Accepts an optional `transaction` so callers that are already inside one (e.g. mass
+   * reassignment during worker deactivation) see their own prior, uncommitted writes.
    */
-  async _buildCandidateOrder(primaryWorkerId, startISO, endISO) {
-    const activeWorkers = await this.workerRepository.listActive();
+  async _buildCandidateOrder(primaryWorkerId, startISO, endISO, { transaction } = {}) {
+    const activeWorkers = await this.workerRepository.listActive({ transaction });
     const activeIds = activeWorkers.map((worker) => worker.id);
     const primaryIsActive = activeIds.includes(primaryWorkerId);
     const otherIds = activeIds.filter((id) => id !== primaryWorkerId);
@@ -171,10 +222,64 @@ export class BookingService {
     if (!otherIds.length) return primaryIsActive ? [primaryWorkerId] : [];
 
     const { dayStart, dayEnd } = toBusinessLocalDayBoundsUtc(startISO, BUSINESS_TZ);
-    const rows = await this.workerRepository.getAvailability(otherIds, { start: startISO, end: endISO, dayStart, dayEnd });
+    const rows = await this.workerRepository.getAvailability(
+      otherIds,
+      { start: startISO, end: endISO, dayStart, dayEnd },
+      { transaction }
+    );
     const ranked = rankAvailableWorkers(rows);
     const rankedIds = ranked.map((row) => row.worker_id);
     return primaryIsActive ? [primaryWorkerId, ...rankedIds] : rankedIds;
+  }
+
+  /**
+   * Reassigns every still-open (PENDING/CONFIRMED), not-yet-started booking away from
+   * `workerId` to another active worker free for that exact slot — used when deactivating
+   * a worker. All-or-nothing: if even one booking has no available replacement, this throws
+   * and the caller's transaction must roll back (partial reassignment would strand some
+   * bookings on a worker about to go inactive). Bookings that are already COMPLETED/
+   * CANCELLED, or PENDING/CONFIRMED but already in the past, are left untouched — the former
+   * don't need reassignment, the latter can't be meaningfully reassigned to anyone else.
+   */
+  async reassignBookingsFromWorker(workerId, { transaction } = {}) {
+    const bookings = await this.bookingRepository.listReassignableForWorker(workerId, { transaction });
+    const reassignments = [];
+
+    for (const booking of bookings) {
+      // start_time/end_time come back from Sequelize as Date objects, but downstream
+      // logic (toBusinessLocalDayBoundsUtc, parseTimestampWithOffset) expects ISO
+      // strings with an explicit offset, same as the client-supplied values everywhere
+      // else these methods are called from.
+      const startISO = booking.start_time.toISOString();
+      const endISO = booking.end_time.toISOString();
+
+      const candidateIds = (await this._buildCandidateOrder(workerId, startISO, endISO, { transaction })).filter(
+        (candidateId) => candidateId !== workerId
+      );
+
+      let newWorkerId = null;
+      for (const candidateId of candidateIds) {
+        const free = await this.bookingAvailabilityService.isWorkerFree(candidateId, startISO, endISO, {
+          transaction,
+          excludeId: booking.id,
+        });
+        if (free) {
+          newWorkerId = candidateId;
+          break;
+        }
+      }
+
+      if (!newWorkerId) {
+        throw new ConflictError(`Cannot deactivate worker: booking ${booking.id} has no available replacement worker`, {
+          code: BOOKING_ERROR_CODES.WORKER_UNAVAILABLE,
+        });
+      }
+
+      await this.bookingRepository.update({ id: booking.id }, { worker_id: newWorkerId }, { transaction });
+      reassignments.push({ booking_id: booking.id, new_worker_id: newWorkerId });
+    }
+
+    return reassignments;
   }
 
   /**

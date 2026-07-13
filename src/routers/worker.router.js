@@ -1,5 +1,10 @@
 import { CONTROLLER_KEYS } from '#constants/singleton';
-import { listAvailableWorkersSchema, registerWorkerSchema, listWorkersSchema } from '#schemas/worker.schema';
+import {
+  listAvailableWorkersSchema,
+  registerWorkerSchema,
+  listWorkersSchema,
+  updateWorkerStatusSchema,
+} from '#schemas/worker.schema';
 
 class WorkerRouter {
   constructor(fastify) {
@@ -30,6 +35,14 @@ class WorkerRouter {
       schema: listWorkersSchema,
       config: { responseFormat: 'standard' },
       handler: this.workerController.list.bind(this.workerController),
+    });
+
+    this.fastify.route({
+      method: 'PATCH',
+      url: '/api/workers/:id',
+      schema: updateWorkerStatusSchema,
+      config: { responseFormat: 'standard' },
+      handler: this.workerController.updateStatus.bind(this.workerController),
     });
   }
 }

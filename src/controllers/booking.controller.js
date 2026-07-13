@@ -20,6 +20,11 @@ export class BookingController {
     return reply.send({ success: true, message: 'Booking rescheduled', data: booking });
   }
 
+  async reassign(request, reply) {
+    const booking = await this.bookingService.reassignBooking(Number(request.params.id));
+    return reply.send({ success: true, message: 'Booking reassigned', data: booking });
+  }
+
   async list(request, reply) {
     const { worker_id, from, to } = request.query;
     const bookings = await this.bookingService.listByWorker(worker_id, { from, to });

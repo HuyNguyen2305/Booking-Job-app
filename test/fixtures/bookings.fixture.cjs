@@ -47,4 +47,14 @@ module.exports = {
     end_time: '2026-08-01T10:00:00.000Z',
     status: 'PENDING',
   },
+  workerOnePastPending: {
+    // Deliberately a fixed date far in the past (not relative to "now") so this stays
+    // a valid past-booking fixture indefinitely, unlike the other 2026-08-xx rows above.
+    id: 1007,
+    worker_id: 501,
+    customer_id: 606,
+    start_time: '2020-01-06T09:00:00.000Z',
+    end_time: '2020-01-06T10:00:00.000Z',
+    status: 'PENDING',
+  },
 };

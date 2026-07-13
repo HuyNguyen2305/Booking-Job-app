@@ -1,4 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import { DateTime } from 'luxon';
 
 process.env.BUSINESS_TZ = 'Asia/Ho_Chi_Minh';
 
@@ -18,6 +19,25 @@ describe('BookingAvailabilityService.checkSlotRules', () => {
     service = Object.create(BookingAvailabilityService.prototype);
     service.holidayRepository = holidayRepositoryMock;
     service.bookingRepository = bookingRepositoryMock;
+  });
+
+  it('rejects a start time that has already passed with PAST_BOOKING_TIME', async () => {
+    // Relative to the real clock (not a hardcoded date) so this stays correct forever.
+    const pastStart = DateTime.now().minus({ days: 7 }).toISO();
+    const pastEnd = DateTime.now().minus({ days: 7 }).plus({ minutes: 30 }).toISO();
+
+    const result = await service.checkSlotRules(pastStart, pastEnd);
+    expect(result).toEqual({ ok: false, code: BOOKING_ERROR_CODES.PAST_BOOKING_TIME });
+  });
+
+  it('checks PAST_BOOKING_TIME before other slot rules', async () => {
+    // A past instant that also happens to be a weekend/off-hours must still surface
+    // PAST_BOOKING_TIME, not NON_WEEKDAY_BOOKING/OUTSIDE_BUSINESS_HOURS.
+    const pastMidnight = DateTime.now().minus({ days: 30 }).set({ hour: 0, minute: 0 }).toISO();
+    const pastMidnightEnd = DateTime.now().minus({ days: 30 }).set({ hour: 0, minute: 30 }).toISO();
+
+    const result = await service.checkSlotRules(pastMidnight, pastMidnightEnd);
+    expect(result).toEqual({ ok: false, code: BOOKING_ERROR_CODES.PAST_BOOKING_TIME });
   });
 
   it('rejects a start time before 09:00 local with OUTSIDE_BUSINESS_HOURS', async () => {
