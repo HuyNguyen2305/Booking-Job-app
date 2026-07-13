@@ -1,24 +1,25 @@
 import { describe, it, expect, afterEach } from '@jest/globals';
 
 const { BookingRepository } = await import('#repositories/booking.repository');
-const { WorkerRepository } = await import('#repositories/worker.repository');
-const { HolidayRepository } = await import('#repositories/holiday.repository');
-const { BookingAvailabilityService } = await import('#services/booking-availability.service');
-const { BookingService } = await import('#services/booking.service');
 const { Worker } = await import('#models/worker.model');
 const { Booking } = await import('#models/booking.model');
-const { ConflictError } = await import('#configs/error');
-const { BOOKING_ERROR_CODES } = await import('#constants/error-codes.const');
+const { isExclusionConstraintError } = await import('#utils/sequelize-error.util');
 
 /**
  * A genuine Postgres-level race: two independent, actually-committing transactions
  * (not the shared seedWithTransaction rollback pattern used elsewhere, which would
  * defeat the point — two operations inside one open transaction never contend on
  * Postgres's exclusion-constraint locking the way two independent transactions do).
- * Only ONE active worker is seeded in this test's scope so the auto-reassignment
- * fallback can't mask the race by silently succeeding against a different worker.
+ *
+ * Deliberately tested at the BookingRepository level, not through
+ * BookingService.createBooking — the service's auto-reassignment fallback loops over
+ * every OTHER currently-active worker in the `workers` table, which on a shared dev DB
+ * (also used for manual/Swagger testing) can be nonzero and nondeterministic. Testing
+ * the raw insert race isolates the actual invariant under test — the DB EXCLUDE
+ * constraint serializing two overlapping writes for the SAME worker — from that
+ * unrelated, environment-dependent roster state.
  */
-describe('BookingService.createBooking concurrency (integration)', () => {
+describe('BookingRepository.create concurrency (integration)', () => {
   let workerId;
   let bookingIdsToClean = [];
 
@@ -33,34 +34,23 @@ describe('BookingService.createBooking concurrency (integration)', () => {
     }
   });
 
-  it('lets exactly one of two overlapping concurrent bookings for the same worker succeed', async () => {
+  it('lets exactly one of two overlapping concurrent inserts for the same worker succeed', async () => {
     const worker = await Worker.create({ name: 'Concurrency Test Worker', is_active: true });
     workerId = worker.id;
 
     const bookingRepository = new BookingRepository();
-    const workerRepository = new WorkerRepository();
-    const holidayRepository = new HolidayRepository();
-
-    const bookingAvailabilityService = Object.create(BookingAvailabilityService.prototype);
-    bookingAvailabilityService.holidayRepository = holidayRepository;
-    bookingAvailabilityService.bookingRepository = bookingRepository;
-
-    const bookingService = Object.create(BookingService.prototype);
-    bookingService.bookingRepository = bookingRepository;
-    bookingService.workerRepository = workerRepository;
-    bookingService.bookingAvailabilityService = bookingAvailabilityService;
 
     // Tuesday 2026-07-14, 09:00-09:30 Asia/Ho_Chi_Minh — valid business-hours weekday slot.
     const payload = {
       worker_id: workerId,
-      customer_id: 1,
       start_time: '2026-07-14T09:00:00+07:00',
       end_time: '2026-07-14T09:30:00+07:00',
+      status: 'PENDING',
     };
 
     const results = await Promise.allSettled([
-      bookingService.createBooking(payload),
-      bookingService.createBooking({ ...payload, customer_id: 2 }),
+      bookingRepository.create({ ...payload, customer_id: 1 }),
+      bookingRepository.create({ ...payload, customer_id: 2 }),
     ]);
 
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
@@ -68,8 +58,7 @@ describe('BookingService.createBooking concurrency (integration)', () => {
 
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
-    expect(rejected[0].reason).toBeInstanceOf(ConflictError);
-    expect(rejected[0].reason.code).toBe(BOOKING_ERROR_CODES.WORKER_UNAVAILABLE);
+    expect(isExclusionConstraintError(rejected[0].reason)).toBe(true);
 
     bookingIdsToClean.push(fulfilled[0].value.id);
   }, 15000);
