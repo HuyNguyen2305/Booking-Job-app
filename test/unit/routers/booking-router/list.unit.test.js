@@ -4,6 +4,7 @@ const bookingServiceMock = {
   createBooking: jest.fn(),
   updateStatus: jest.fn(),
   listByWorker: jest.fn(),
+  listByCustomer: jest.fn(),
 };
 
 class MockBookingService {
@@ -39,7 +40,7 @@ describe('GET /api/bookings (router + controller + error handler)', () => {
     const response = await app.inject({ method: 'GET', url: '/api/bookings?worker_id=5' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ success: true, message: [], data: bookings });
+    expect(response.json()).toEqual({ success: true, message: 'Bookings retrieved', data: bookings });
     expect(bookingServiceMock.listByWorker).toHaveBeenCalledWith(5, { from: undefined, to: undefined });
   });
 
@@ -57,7 +58,19 @@ describe('GET /api/bookings (router + controller + error handler)', () => {
     });
   });
 
-  it('returns 400 schema validation error when worker_id is missing, without calling the service', async () => {
+  it('returns 200 with the customer schedule from the service when customer_id is given', async () => {
+    const bookings = [{ id: 3 }];
+    bookingServiceMock.listByCustomer.mockResolvedValue(bookings);
+
+    const response = await app.inject({ method: 'GET', url: '/api/bookings?customer_id=601' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ success: true, message: 'Bookings retrieved', data: bookings });
+    expect(bookingServiceMock.listByCustomer).toHaveBeenCalledWith(601, { from: undefined, to: undefined });
+    expect(bookingServiceMock.listByWorker).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 schema validation error when neither worker_id nor customer_id is given, without calling the service', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/bookings' });
 
     expect(response.statusCode).toBe(400);
@@ -65,5 +78,6 @@ describe('GET /api/bookings (router + controller + error handler)', () => {
     expect(body.success).toBe(false);
     expect(body.message).toBe('Validation error');
     expect(bookingServiceMock.listByWorker).not.toHaveBeenCalled();
+    expect(bookingServiceMock.listByCustomer).not.toHaveBeenCalled();
   });
 });

@@ -8,7 +8,7 @@ import {
 import { BOOKING_ERROR_CODES } from '#constants/error-codes.const';
 import { BUSINESS_TZ } from '#constants/business-hours.const';
 import { ValidationError, ConflictError, NotFoundError } from '#configs/error';
-import { isAtLeastMinutesApart, toBusinessLocalDayBoundsUtc } from '#utils/date.util';
+import { isAtLeastMinutesApart, toBusinessLocalWeekBoundsUtc } from '#utils/date.util';
 import { isExclusionConstraintError } from '#utils/sequelize-error.util';
 import { rankAvailableWorkers } from '#utils/worker-availability.util';
 import { sequelize } from '#models/index';
@@ -26,12 +26,18 @@ export class BookingService {
   constructor({ container }) {
     this.bookingRepository = container.resolve(REPOSITORY_KEYS.BOOKING);
     this.workerRepository = container.resolve(REPOSITORY_KEYS.WORKER);
+    this.customerRepository = container.resolve(REPOSITORY_KEYS.CUSTOMER);
     this.bookingAvailabilityService = container.resolve(SERVICE_KEYS.BOOKING_AVAILABILITY);
   }
 
   async createBooking({ worker_id, customer_id, start_time, end_time }) {
     if (!isAtLeastMinutesApart(start_time, end_time, MIN_BOOKING_DURATION_MINUTES)) {
       throw new ValidationError(`end_time must be at least ${MIN_BOOKING_DURATION_MINUTES} minutes after start_time`);
+    }
+
+    const customer = await this.customerRepository.getOne({ where: { id: customer_id } });
+    if (!customer) {
+      throw new ValidationError('Customer not found', { code: BOOKING_ERROR_CODES.CUSTOMER_NOT_FOUND });
     }
 
     const slotCheck = await this.bookingAvailabilityService.checkSlotRules(start_time, end_time);
@@ -118,11 +124,46 @@ export class BookingService {
       throw new ConflictError(`Cannot transition booking from ${booking.status} to ${nextStatus}`);
     }
 
+    if (nextStatus === BOOKING_STATUS.COMPLETED) {
+      // COMPLETED is terminal (never transitioned out of), so this hour count is
+      // added to workers.total_hours exactly once, atomically, in the same
+      // transaction as the status flip.
+      const hours = (new Date(booking.end_time) - new Date(booking.start_time)) / (1000 * 60 * 60);
+      return sequelize.transaction(async (transaction) => {
+        const updated = await this.bookingRepository.update({ id }, { status: nextStatus }, { transaction });
+        await this.workerRepository.incrementTotalHours(booking.worker_id, hours, { transaction });
+        return updated;
+      });
+    }
+
     return this.bookingRepository.update({ id }, { status: nextStatus });
+  }
+
+  /**
+   * "Deleting" a booking is a soft-delete: transitions it to CANCELLED via the same
+   * validated transition logic as updateStatus (still blocked from COMPLETED/CANCELLED,
+   * still terminal once cancelled). The row is kept — needed for history, and the DB's
+   * EXCLUDE constraint/booked-hours queries already treat CANCELLED as "not occupying"
+   * a slot, so this fully frees the worker's time without ever deleting the record.
+   */
+  async cancelBooking(id) {
+    return this.updateStatus(id, BOOKING_STATUS.CANCELLED);
   }
 
   async listByWorker(workerId, { from, to } = {}) {
     return this.bookingRepository.listByWorker(workerId, { from, to });
+  }
+
+  async listByCustomer(customerId, { from, to } = {}) {
+    return this.bookingRepository.listByCustomer(customerId, { from, to });
+  }
+
+  async getById(id) {
+    const booking = await this.bookingRepository.getOne({ where: { id } });
+    if (!booking) {
+      throw new NotFoundError('Booking not found');
+    }
+    return booking;
   }
 
   /**
@@ -206,12 +247,15 @@ export class BookingService {
   }
 
   /**
-   * [primaryWorkerId, ...other active workers with no overlap, ranked ascending by that
-   * day's booked hours]. `primaryWorkerId` is only included if it's actually an active,
-   * registered worker — a request for a nonexistent/inactive worker_id must not be
-   * silently accepted just because no overlapping booking happens to exist for that id yet.
-   * Accepts an optional `transaction` so callers that are already inside one (e.g. mass
-   * reassignment during worker deactivation) see their own prior, uncommitted writes.
+   * [primaryWorkerId, ...other active workers with no overlap, ranked ascending by their
+   * total occupied hours (PENDING+CONFIRMED+COMPLETED) for the business-local week
+   * containing the slot] — so a worker who's already loaded up toward the weekly hours
+   * cap is offered last, spreading assignment/reassignment load across the week rather
+   * than just that single day. `primaryWorkerId` is only included if it's actually an
+   * active, registered worker — a request for a nonexistent/inactive worker_id must not
+   * be silently accepted just because no overlapping booking happens to exist for that id
+   * yet. Accepts an optional `transaction` so callers that are already inside one (e.g.
+   * mass reassignment during worker deactivation) see their own prior, uncommitted writes.
    */
   async _buildCandidateOrder(primaryWorkerId, startISO, endISO, { transaction } = {}) {
     const activeWorkers = await this.workerRepository.listActive({ transaction });
@@ -221,10 +265,10 @@ export class BookingService {
 
     if (!otherIds.length) return primaryIsActive ? [primaryWorkerId] : [];
 
-    const { dayStart, dayEnd } = toBusinessLocalDayBoundsUtc(startISO, BUSINESS_TZ);
+    const { weekStart, weekEnd } = toBusinessLocalWeekBoundsUtc(startISO, BUSINESS_TZ);
     const rows = await this.workerRepository.getAvailability(
       otherIds,
-      { start: startISO, end: endISO, dayStart, dayEnd },
+      { start: startISO, end: endISO, windowStart: weekStart, windowEnd: weekEnd },
       { transaction }
     );
     const ranked = rankAvailableWorkers(rows);

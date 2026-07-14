@@ -26,8 +26,20 @@ export class BookingController {
   }
 
   async list(request, reply) {
-    const { worker_id, from, to } = request.query;
-    const bookings = await this.bookingService.listByWorker(worker_id, { from, to });
-    return reply.send({ success: true, message: [], data: bookings });
+    const { worker_id, customer_id, from, to } = request.query;
+    const bookings = worker_id
+      ? await this.bookingService.listByWorker(worker_id, { from, to })
+      : await this.bookingService.listByCustomer(customer_id, { from, to });
+    return reply.send({ success: true, message: 'Bookings retrieved', data: bookings });
+  }
+
+  async getById(request, reply) {
+    const booking = await this.bookingService.getById(Number(request.params.id));
+    return reply.send({ success: true, message: 'Booking retrieved', data: booking });
+  }
+
+  async cancel(request, reply) {
+    const booking = await this.bookingService.cancelBooking(Number(request.params.id));
+    return reply.send({ success: true, message: 'Booking cancelled', data: booking });
   }
 }

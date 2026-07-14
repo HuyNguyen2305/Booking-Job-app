@@ -9,3 +9,4 @@ if (!IANAZone.isValidZone(BUSINESS_TZ)) {
 
 export const WORK_START_HOUR = 9;
 export const WORK_END_HOUR = 17;
+export const WEEKLY_HOURS_CAP = 40;

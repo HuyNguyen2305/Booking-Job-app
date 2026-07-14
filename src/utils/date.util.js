@@ -25,3 +25,15 @@ export function toBusinessLocalDayBoundsUtc(startISO, zone) {
   const dayStart = startLocal.startOf('day');
   return { dayStart: dayStart.toUTC().toJSDate(), dayEnd: dayStart.plus({ days: 1 }).toUTC().toJSDate() };
 }
+
+/**
+ * UTC instant bounds of the local business-calendar week (Monday 00:00 through the
+ * following Monday 00:00) containing `referenceISO`. Computed from luxon's ISO
+ * `weekday` (1=Monday..7=Sunday, locale-independent) rather than `startOf('week')`,
+ * which is locale-dependent and would silently shift the week start on some locales.
+ */
+export function toBusinessLocalWeekBoundsUtc(referenceISO, zone) {
+  const referenceLocal = DateTime.fromISO(referenceISO, { setZone: true }).setZone(zone);
+  const weekStart = referenceLocal.startOf('day').minus({ days: referenceLocal.weekday - 1 });
+  return { weekStart: weekStart.toUTC().toJSDate(), weekEnd: weekStart.plus({ weeks: 1 }).toUTC().toJSDate() };
+}

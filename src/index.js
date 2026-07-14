@@ -50,6 +50,7 @@ export async function buildApp(opts = {}) {
         { name: 'Bookings', description: 'Booking scheduling endpoints' },
         { name: 'Workers', description: 'Worker roster and availability endpoints' },
         { name: 'Holidays', description: 'Company holiday admin endpoints' },
+        { name: 'Customers', description: 'Customer roster endpoints' },
       ],
     },
   });

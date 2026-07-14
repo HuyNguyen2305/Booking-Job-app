@@ -25,6 +25,16 @@ const workerWithReassignmentsSchema = {
   },
 };
 
+const workerDetailSchema = {
+  type: 'object',
+  properties: {
+    ...workerSchema.properties,
+    hours_this_week: { type: 'number' },
+    weekly_hours_cap: { type: 'number' },
+    total_hours: { type: 'number' },
+  },
+};
+
 const availableWorkerSchema = {
   type: 'object',
   properties: {
@@ -71,6 +81,23 @@ export const listWorkersSchema = {
   summary: 'List all registered workers',
   response: {
     200: buildSuccessResponse({ type: 'array', items: workerSchema }),
+  },
+};
+
+export const getWorkerSchema = {
+  tags: ['Workers'],
+  summary: 'Get a worker by id, including a performance snapshot',
+  description:
+    'hours_this_week/weekly_hours_cap reflect only COMPLETED bookings within the current business-local week (Monday-Sunday); total_hours is the all-time COMPLETED total.',
+  params: {
+    type: 'object',
+    required: ['id'],
+    properties: {
+      id: { type: 'integer' },
+    },
+  },
+  response: {
+    200: buildSuccessResponse(workerDetailSchema),
   },
 };
 

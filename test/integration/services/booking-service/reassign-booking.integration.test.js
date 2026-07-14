@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, beforeAll } from '@jest/globals';
+import { DateTime } from 'luxon';
 import { nextTuesdayAt } from '#test/helpers/future-dates.js';
 
 const { BookingRepository } = await import('#repositories/booking.repository');
@@ -141,6 +142,39 @@ describe('BookingService.reassignBooking (integration)', () => {
     await blockerOnB.update({ status: 'CANCELLED' });
 
     const result = await bookingService.reassignBooking(booking.id);
+    expect(result.worker_id).toBe(workerB.id);
+  }, 15000);
+
+  it('prefers the candidate with fewer occupied hours that business week, not just whoever is free', async () => {
+    const workerA = await Worker.create({ name: 'Current Worker 3', is_active: true });
+    const workerB = await Worker.create({ name: 'Light Week Worker', is_active: true });
+    const workerC = await Worker.create({ name: 'Busy Week Worker', is_active: true });
+    workerIds.push(workerA.id, workerB.id, workerC.id);
+
+    const slot = { start_time: nextTuesdayAt(9, 0), end_time: nextTuesdayAt(9, 30) };
+    await blockOtherActiveWorkers([workerA.id, workerB.id, workerC.id], slot);
+
+    // Monday of the same business week as the Tuesday reassignment slot — workerC is
+    // free for the Tuesday slot itself, but already has 3 occupied hours earlier that
+    // week, so a same-day-only ranking would have missed this and picked either worker.
+    const mondaySlot = {
+      start_time: DateTime.fromISO(slot.start_time).minus({ days: 1 }).toISO(),
+      end_time: DateTime.fromISO(slot.start_time).minus({ days: 1 }).plus({ hours: 3 }).toISO(),
+    };
+    const busyBooking = await Booking.create({
+      worker_id: workerC.id,
+      customer_id: 3,
+      ...mondaySlot,
+      status: 'CONFIRMED',
+    });
+    bookingIds.push(busyBooking.id);
+
+    const booking = await Booking.create({ worker_id: workerA.id, customer_id: 1, ...slot, status: 'PENDING' });
+    bookingIds.push(booking.id);
+
+    const bookingService = buildService();
+    const result = await bookingService.reassignBooking(booking.id);
+
     expect(result.worker_id).toBe(workerB.id);
   }, 15000);
 });

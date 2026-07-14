@@ -47,6 +47,22 @@ describe('GET /api/workers/available (router + controller + error handler)', () 
     expect(response.json()).toEqual({ success: true, message: 'Available workers', data: workers });
   });
 
+  it('returns 200 with a "No available worker" message when the result is empty', async () => {
+    workerServiceMock.listAvailable.mockResolvedValue([]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/workers/available?start=2026-07-14T09:00:00%2B07:00&end=2026-07-14T10:00:00%2B07:00',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      success: true,
+      message: 'No available worker for this time window',
+      data: [],
+    });
+  });
+
   it('returns 400 schema validation error when start/end are missing, without calling the service', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/workers/available' });
 

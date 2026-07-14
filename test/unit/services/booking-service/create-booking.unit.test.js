@@ -7,6 +7,9 @@ const workerRepositoryMock = {
   listActive: jest.fn(),
   getAvailability: jest.fn(),
 };
+const customerRepositoryMock = {
+  getOne: jest.fn(),
+};
 const bookingAvailabilityServiceMock = {
   checkSlotRules: jest.fn(),
   isWorkerFree: jest.fn(),
@@ -30,11 +33,13 @@ describe('BookingService.createBooking', () => {
     jest.clearAllMocks();
     sequelizeMock.transaction.mockImplementation((callback) => callback('mock-transaction'));
     workerRepositoryMock.listActive.mockResolvedValue([]);
+    customerRepositoryMock.getOne.mockResolvedValue({ id: 2, name: 'Alice' });
     bookingAvailabilityServiceMock.checkSlotRules.mockResolvedValue({ ok: true });
 
     service = Object.create(BookingService.prototype);
     service.bookingRepository = bookingRepositoryMock;
     service.workerRepository = workerRepositoryMock;
+    service.customerRepository = customerRepositoryMock;
     service.bookingAvailabilityService = bookingAvailabilityServiceMock;
   });
 
@@ -50,6 +55,17 @@ describe('BookingService.createBooking', () => {
       service.createBooking({ ...payload, end_time: '2026-07-14T09:29:00+07:00' })
     ).rejects.toBeInstanceOf(ValidationError);
     expect(bookingAvailabilityServiceMock.checkSlotRules).not.toHaveBeenCalled();
+  });
+
+  it('throws ValidationError with CUSTOMER_NOT_FOUND when customer_id does not reference a real customer', async () => {
+    customerRepositoryMock.getOne.mockResolvedValue(null);
+
+    await expect(service.createBooking(payload)).rejects.toMatchObject({
+      code: BOOKING_ERROR_CODES.CUSTOMER_NOT_FOUND,
+    });
+    expect(customerRepositoryMock.getOne).toHaveBeenCalledWith({ where: { id: payload.customer_id } });
+    expect(bookingAvailabilityServiceMock.checkSlotRules).not.toHaveBeenCalled();
+    expect(bookingRepositoryMock.create).not.toHaveBeenCalled();
   });
 
   it('throws with the slot-rule code when checkSlotRules rejects the window', async () => {
@@ -124,6 +140,13 @@ describe('BookingService.createBooking', () => {
     );
     expect(result.reassigned).toBe(true);
     expect(result.requested_worker_id).toBe(1);
+    // Regression guard: candidates must be ranked by that business WEEK's occupied
+    // hours, not just that single day — see _buildCandidateOrder's weekStart/weekEnd.
+    expect(workerRepositoryMock.getAvailability).toHaveBeenCalledWith(
+      [2],
+      expect.objectContaining({ windowStart: expect.any(Date), windowEnd: expect.any(Date) }),
+      { transaction: undefined }
+    );
   });
 
   it('throws ConflictError with WORKER_UNAVAILABLE when every candidate is busy', async () => {

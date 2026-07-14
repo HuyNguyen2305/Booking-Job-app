@@ -110,19 +110,52 @@ export const updateBookingStatusSchema = {
 
 export const listBookingsSchema = {
   tags: ['Bookings'],
-  summary: "List a worker's schedule",
+  summary: "List a worker's or customer's bookings",
   description:
-    'Returns a worker\'s bookings sorted by start_time ascending. Optionally filter to bookings overlapping a [from, to] window to see whether the worker is free or busy.',
+    'Returns bookings sorted by start_time ascending, filtered by either worker_id or customer_id (exactly one required). Optionally filter to bookings overlapping a [from, to] window.',
   querystring: {
     type: 'object',
-    required: ['worker_id'],
+    anyOf: [{ required: ['worker_id'] }, { required: ['customer_id'] }],
     properties: {
       worker_id: { type: 'integer', minimum: 1 },
+      customer_id: { type: 'integer', minimum: 1 },
       from: { type: 'string', format: 'date-time' },
       to: { type: 'string', format: 'date-time' },
     },
   },
   response: {
     200: buildSuccessResponse({ type: 'array', items: bookingSchema }),
+  },
+};
+
+export const getBookingSchema = {
+  tags: ['Bookings'],
+  summary: 'Get a booking by id',
+  params: {
+    type: 'object',
+    required: ['id'],
+    properties: {
+      id: { type: 'integer' },
+    },
+  },
+  response: {
+    200: buildSuccessResponse(bookingSchema),
+  },
+};
+
+export const cancelBookingSchema = {
+  tags: ['Bookings'],
+  summary: 'Delete (cancel) a booking',
+  description:
+    'Soft-deletes a booking by transitioning it to CANCELLED — the row is kept for history, not removed. Only PENDING/CONFIRMED bookings can be cancelled; COMPLETED/CANCELLED are terminal. Equivalent to PATCH /api/bookings/:id/status with {status: "CANCELLED"}, exposed here as a DELETE for convenience.',
+  params: {
+    type: 'object',
+    required: ['id'],
+    properties: {
+      id: { type: 'integer' },
+    },
+  },
+  response: {
+    200: buildSuccessResponse(bookingSchema),
   },
 };

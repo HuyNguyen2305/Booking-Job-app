@@ -5,6 +5,8 @@ import {
   rescheduleBookingSchema,
   reassignBookingSchema,
   listBookingsSchema,
+  getBookingSchema,
+  cancelBookingSchema,
 } from '#schemas/booking.schema';
 
 class BookingRouter {
@@ -52,6 +54,22 @@ class BookingRouter {
       schema: listBookingsSchema,
       config: { responseFormat: 'standard' },
       handler: this.bookingController.list.bind(this.bookingController),
+    });
+
+    this.fastify.route({
+      method: 'GET',
+      url: '/api/bookings/:id',
+      schema: getBookingSchema,
+      config: { responseFormat: 'standard' },
+      handler: this.bookingController.getById.bind(this.bookingController),
+    });
+
+    this.fastify.route({
+      method: 'DELETE',
+      url: '/api/bookings/:id',
+      schema: cancelBookingSchema,
+      config: { responseFormat: 'standard' },
+      handler: this.bookingController.cancel.bind(this.bookingController),
     });
   }
 }

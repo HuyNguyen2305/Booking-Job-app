@@ -15,6 +15,10 @@ export class BaseRepository {
     return this.model.create(data, { transaction });
   }
 
+  async bulkCreate(rows, { transaction } = {}) {
+    return this.model.bulkCreate(rows, { transaction });
+  }
+
   async update(where, data, { transaction } = {}) {
     const [affected] = await this.model.update(data, { where, transaction });
     if (affected === 0) return null;

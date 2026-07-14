@@ -56,6 +56,6 @@ describe('POST /api/workers and GET /api/workers (router + controller)', () => {
     const response = await app.inject({ method: 'GET', url: '/api/workers' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ success: true, message: [], data: workers });
+    expect(response.json()).toEqual({ success: true, message: 'Workers retrieved', data: workers });
   });
 });

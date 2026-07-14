@@ -16,8 +16,8 @@ describe('WorkerRepository.getAvailability (integration)', () => {
   // Tuesday 2026-07-14, business hours 09:00-17:00 Asia/Ho_Chi_Minh (UTC+7).
   const queryWindow = { start: '2026-07-14T10:00:00+07:00', end: '2026-07-14T11:00:00+07:00' };
   const dayBounds = {
-    dayStart: new Date('2026-07-13T17:00:00.000Z'), // 2026-07-14T00:00+07:00
-    dayEnd: new Date('2026-07-14T17:00:00.000Z'), // 2026-07-15T00:00+07:00
+    windowStart: new Date('2026-07-13T17:00:00.000Z'), // 2026-07-14T00:00+07:00
+    windowEnd: new Date('2026-07-14T17:00:00.000Z'), // 2026-07-15T00:00+07:00
   };
 
   const bookingRows = [
@@ -96,6 +96,39 @@ describe('WorkerRepository.getAvailability (integration)', () => {
       const byWorker = Object.fromEntries(rows.map((r) => [r.worker_id, r]));
       expect(byWorker[7004]).toEqual({ worker_id: 7004, has_overlap: true, booked_hours: 3 });
       expect(byWorker[7005]).toEqual({ worker_id: 7005, has_overlap: false, booked_hours: 0 });
+    });
+  });
+
+  it('sums booked hours across a week-wide window, not just the query day, when given week bounds', async () => {
+    // Same worker (7002) as the day-scoped test above, but here the caller passes bounds
+    // spanning the whole business week — proving getAvailability is genuinely reusable
+    // for weekly-hours ranking (BookingService's candidate ordering), not hardcoded to a
+    // single day. 7002's existing 1-hour Tuesday booking plus a 2-hour Monday booking in
+    // the same week should sum to 3, where a day-scoped window would have only seen 1.
+    const mondayBookingRow = {
+      id: 8105,
+      worker_id: 7002,
+      customer_id: 1,
+      start_time: '2026-07-13T09:00:00+07:00',
+      end_time: '2026-07-13T11:00:00+07:00',
+      status: 'CONFIRMED',
+    };
+    const weekBounds = {
+      windowStart: new Date('2026-07-12T17:00:00.000Z'), // 2026-07-13T00:00+07:00 (Monday)
+      windowEnd: new Date('2026-07-19T17:00:00.000Z'), // 2026-07-20T00:00+07:00 (following Monday)
+    };
+
+    const ctx = await seedWithTransaction([
+      { table: 'workers', rows: workerFixtures.workers },
+      { table: 'bookings', rows: [...bookingRows, mondayBookingRow] },
+    ]);
+    rollback = ctx.rollback;
+
+    await ctx.run(async (transaction) => {
+      const rows = await repository.getAvailability([7002], { ...queryWindow, ...weekBounds }, { transaction });
+
+      const byWorker = Object.fromEntries(rows.map((r) => [r.worker_id, r]));
+      expect(byWorker[7002]).toEqual({ worker_id: 7002, has_overlap: false, booked_hours: 3 });
     });
   });
 

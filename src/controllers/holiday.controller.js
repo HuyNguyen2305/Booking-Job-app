@@ -10,9 +10,14 @@ export class HolidayController {
     return reply.code(201).send({ success: true, message: 'Holiday created', data: holiday });
   }
 
+  async createRange(request, reply) {
+    const holidays = await this.holidayService.createRange(request.body);
+    return reply.code(201).send({ success: true, message: 'Holidays created', data: holidays });
+  }
+
   async list(request, reply) {
     const holidays = await this.holidayService.list();
-    return reply.send({ success: true, message: [], data: holidays });
+    return reply.send({ success: true, message: 'Holidays retrieved', data: holidays });
   }
 
   async remove(request, reply) {

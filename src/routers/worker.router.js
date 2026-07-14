@@ -4,6 +4,7 @@ import {
   registerWorkerSchema,
   listWorkersSchema,
   updateWorkerStatusSchema,
+  getWorkerSchema,
 } from '#schemas/worker.schema';
 
 class WorkerRouter {
@@ -43,6 +44,14 @@ class WorkerRouter {
       schema: updateWorkerStatusSchema,
       config: { responseFormat: 'standard' },
       handler: this.workerController.updateStatus.bind(this.workerController),
+    });
+
+    this.fastify.route({
+      method: 'GET',
+      url: '/api/workers/:id',
+      schema: getWorkerSchema,
+      config: { responseFormat: 'standard' },
+      handler: this.workerController.getById.bind(this.workerController),
     });
   }
 }

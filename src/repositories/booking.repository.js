@@ -26,6 +26,13 @@ export class BookingRepository extends BaseRepository {
     return this.get({ where, order: [['start_time', 'ASC']], transaction });
   }
 
+  async listByCustomer(customerId, { from, to, transaction } = {}) {
+    const where = { customer_id: customerId };
+    if (from) where.end_time = { [Op.gt]: from };
+    if (to) where.start_time = { [Op.lt]: to };
+    return this.get({ where, order: [['start_time', 'ASC']], transaction });
+  }
+
   /** This worker's still-open (PENDING/CONFIRMED) bookings that haven't started yet. */
   async listReassignableForWorker(workerId, { transaction } = {}) {
     return this.get({

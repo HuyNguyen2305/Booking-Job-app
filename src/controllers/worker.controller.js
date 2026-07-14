@@ -8,7 +8,8 @@ export class WorkerController {
   async listAvailable(request, reply) {
     const { start, end } = request.query;
     const workers = await this.workerService.listAvailable({ start, end });
-    return reply.send({ success: true, message: 'Available workers', data: workers });
+    const message = workers.length ? 'Available workers' : 'No available worker for this time window';
+    return reply.send({ success: true, message, data: workers });
   }
 
   async register(request, reply) {
@@ -18,11 +19,16 @@ export class WorkerController {
 
   async list(request, reply) {
     const workers = await this.workerService.list();
-    return reply.send({ success: true, message: [], data: workers });
+    return reply.send({ success: true, message: 'Workers retrieved', data: workers });
   }
 
   async updateStatus(request, reply) {
     const worker = await this.workerService.updateStatus(Number(request.params.id), request.body.is_active);
     return reply.send({ success: true, message: 'Worker status updated', data: worker });
+  }
+
+  async getById(request, reply) {
+    const worker = await this.workerService.getById(Number(request.params.id));
+    return reply.send({ success: true, message: 'Worker retrieved', data: worker });
   }
 }

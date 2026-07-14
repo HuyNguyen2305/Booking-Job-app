@@ -29,6 +29,26 @@ export const createHolidaySchema = {
   },
 };
 
+export const createHolidayRangeSchema = {
+  tags: ['Holidays'],
+  summary: 'Create a multi-day holiday',
+  description:
+    'Creates one holiday row per calendar day in [start_date, end_date] inclusive, all sharing the same name (e.g. a multi-day holiday like Tet). recurring_annual applies to every day in the range.',
+  body: {
+    type: 'object',
+    required: ['name', 'start_date', 'end_date'],
+    properties: {
+      name: { type: 'string', minLength: 1 },
+      start_date: { type: 'string', format: 'date' },
+      end_date: { type: 'string', format: 'date' },
+      recurring_annual: { type: 'boolean', default: false },
+    },
+  },
+  response: {
+    201: buildSuccessResponse({ type: 'array', items: holidaySchema }),
+  },
+};
+
 export const listHolidaysSchema = {
   tags: ['Holidays'],
   summary: 'List all company holidays',

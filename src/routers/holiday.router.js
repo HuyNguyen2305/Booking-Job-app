@@ -1,5 +1,10 @@
 import { CONTROLLER_KEYS } from '#constants/singleton';
-import { createHolidaySchema, listHolidaysSchema, deleteHolidaySchema } from '#schemas/holiday.schema';
+import {
+  createHolidaySchema,
+  createHolidayRangeSchema,
+  listHolidaysSchema,
+  deleteHolidaySchema,
+} from '#schemas/holiday.schema';
 
 class HolidayRouter {
   constructor(fastify) {
@@ -14,6 +19,14 @@ class HolidayRouter {
       schema: createHolidaySchema,
       config: { responseFormat: 'standard' },
       handler: this.holidayController.create.bind(this.holidayController),
+    });
+
+    this.fastify.route({
+      method: 'POST',
+      url: '/api/holidays/range',
+      schema: createHolidayRangeSchema,
+      config: { responseFormat: 'standard' },
+      handler: this.holidayController.createRange.bind(this.holidayController),
     });
 
     this.fastify.route({

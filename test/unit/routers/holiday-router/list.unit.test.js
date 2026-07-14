@@ -39,6 +39,6 @@ describe('GET /api/holidays (router + controller)', () => {
     const response = await app.inject({ method: 'GET', url: '/api/holidays' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ success: true, message: [], data: holidays });
+    expect(response.json()).toEqual({ success: true, message: 'Holidays retrieved', data: holidays });
   });
 });
