@@ -50,4 +50,30 @@ describe('BookingService.cancelBooking', () => {
       expect(bookingRepositoryMock.update).not.toHaveBeenCalled();
     }
   );
+
+  it("throws ConflictError with PAST_BOOKING_TIME when a CONFIRMED booking's start_time has already passed", async () => {
+    bookingRepositoryMock.getOne.mockResolvedValue({
+      id: 1,
+      status: BOOKING_STATUS.CONFIRMED,
+      start_time: new Date('2020-01-06T02:00:00.000Z'),
+    });
+
+    await expect(service.cancelBooking(1)).rejects.toMatchObject({ code: 'PAST_BOOKING_TIME' });
+    expect(bookingRepositoryMock.update).not.toHaveBeenCalled();
+  });
+
+  it('still cancels a PENDING booking whose start_time has already passed (nobody ever committed to it)', async () => {
+    bookingRepositoryMock.getOne.mockResolvedValue({
+      id: 1,
+      status: BOOKING_STATUS.PENDING,
+      start_time: new Date('2020-01-06T02:00:00.000Z'),
+    });
+    const updated = { id: 1, status: BOOKING_STATUS.CANCELLED };
+    bookingRepositoryMock.update.mockResolvedValue(updated);
+
+    const result = await service.cancelBooking(1);
+
+    expect(bookingRepositoryMock.update).toHaveBeenCalledWith({ id: 1 }, { status: BOOKING_STATUS.CANCELLED });
+    expect(result).toBe(updated);
+  });
 });

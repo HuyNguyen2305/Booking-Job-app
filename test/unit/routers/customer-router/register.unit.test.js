@@ -32,17 +32,18 @@ describe('POST /api/customers (router + controller)', () => {
   });
 
   it('returns 201 with the registered customer', async () => {
-    const customer = { id: 1, name: 'Alice' };
+    const customer = { id: 1, name: 'Alice', email: 'alice@example.com' };
     customerServiceMock.register.mockResolvedValue(customer);
 
-    const response = await app.inject({ method: 'POST', url: '/api/customers', payload: { name: 'Alice' } });
+    const payload = { name: 'Alice', email: 'alice@example.com', password: 'secret' };
+    const response = await app.inject({ method: 'POST', url: '/api/customers', payload });
 
     expect(response.statusCode).toBe(201);
     expect(response.json()).toEqual({ success: true, message: 'Customer registered', data: customer });
-    expect(customerServiceMock.register).toHaveBeenCalledWith({ name: 'Alice' });
+    expect(customerServiceMock.register).toHaveBeenCalledWith(payload);
   });
 
-  it('returns 400 schema validation error when name is missing, without calling the service', async () => {
+  it('returns 400 schema validation error when name/email/password is missing, without calling the service', async () => {
     const response = await app.inject({ method: 'POST', url: '/api/customers', payload: {} });
 
     expect(response.statusCode).toBe(400);

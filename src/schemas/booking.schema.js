@@ -1,4 +1,4 @@
-import { buildSuccessResponse } from '#common-schemas/response.schema';
+import { buildSuccessResponse, buildPaginatedResponse } from '#common-schemas/response.schema';
 import { BOOKING_STATUS_VALUES } from '#constants/booking-status.const';
 
 const bookingSchema = {
@@ -110,7 +110,7 @@ export const updateBookingStatusSchema = {
 
 export const listBookingsSchema = {
   tags: ['Bookings'],
-  summary: "List a worker's or customer's bookings",
+  summary: "List a worker's or customer's bookings (paginated)",
   description:
     'Returns bookings sorted by start_time ascending, filtered by either worker_id or customer_id (exactly one required). Optionally filter to bookings overlapping a [from, to] window.',
   querystring: {
@@ -121,10 +121,12 @@ export const listBookingsSchema = {
       customer_id: { type: 'integer', minimum: 1 },
       from: { type: 'string', format: 'date-time' },
       to: { type: 'string', format: 'date-time' },
+      page: { type: 'integer', minimum: 1, default: 1 },
+      limit: { type: 'integer', minimum: 1, default: 20 },
     },
   },
   response: {
-    200: buildSuccessResponse({ type: 'array', items: bookingSchema }),
+    200: buildPaginatedResponse(bookingSchema),
   },
 };
 
@@ -140,6 +142,28 @@ export const getBookingSchema = {
   },
   response: {
     200: buildSuccessResponse(bookingSchema),
+  },
+};
+
+export const autoCompleteBookingsSchema = {
+  tags: ['Bookings'],
+  summary: 'Auto-complete CONFIRMED bookings whose end_time has passed',
+  description:
+    'Sweeps every CONFIRMED booking whose end_time has already passed and transitions it to COMPLETED, adding its duration to the assigned worker\'s total_hours. Intended for manual/ops triggering; the same logic also runs automatically on a timer.',
+  response: {
+    200: buildSuccessResponse({
+      type: 'object',
+      properties: {
+        completed: { type: 'array', items: { type: 'integer' } },
+        failed: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { booking_id: { type: 'integer' }, message: { type: 'string' } },
+          },
+        },
+      },
+    }),
   },
 };
 

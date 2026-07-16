@@ -17,6 +17,7 @@ jest.unstable_mockModule('#models/index', () => ({ sequelize: sequelizeMock }));
 const { BookingService } = await import('#services/booking.service');
 const { NotFoundError, ConflictError } = await import('#configs/error');
 const { BOOKING_STATUS } = await import('#constants/booking-status.const');
+const { BOOKING_ERROR_CODES } = await import('#constants/error-codes.const');
 
 describe('BookingService.updateStatus', () => {
   let service;
@@ -67,6 +68,52 @@ describe('BookingService.updateStatus', () => {
 
     await expect(service.updateStatus(1, nextStatus)).rejects.toThrow(ConflictError);
     expect(bookingRepositoryMock.update).not.toHaveBeenCalled();
+  });
+
+  describe('transitioning to CANCELLED after start_time has passed', () => {
+    it('throws ConflictError with PAST_BOOKING_TIME for a CONFIRMED booking (worker already committed to it)', async () => {
+      bookingRepositoryMock.getOne.mockResolvedValue({
+        id: 1,
+        status: BOOKING_STATUS.CONFIRMED,
+        start_time: new Date('2020-01-06T02:00:00.000Z'),
+      });
+
+      await expect(service.updateStatus(1, BOOKING_STATUS.CANCELLED)).rejects.toMatchObject({
+        code: BOOKING_ERROR_CODES.PAST_BOOKING_TIME,
+      });
+      expect(bookingRepositoryMock.update).not.toHaveBeenCalled();
+    });
+
+    it('still cancels a PENDING booking regardless of timing (nobody ever committed to it)', async () => {
+      bookingRepositoryMock.getOne.mockResolvedValue({
+        id: 1,
+        status: BOOKING_STATUS.PENDING,
+        start_time: new Date('2020-01-06T02:00:00.000Z'),
+      });
+      const updatedBooking = { id: 1, status: BOOKING_STATUS.CANCELLED };
+      bookingRepositoryMock.update.mockResolvedValue(updatedBooking);
+
+      const result = await service.updateStatus(1, BOOKING_STATUS.CANCELLED);
+
+      expect(bookingRepositoryMock.update).toHaveBeenCalledWith({ id: 1 }, { status: BOOKING_STATUS.CANCELLED });
+      expect(result).toBe(updatedBooking);
+    });
+
+    it('does not block COMPLETED for a past booking (auto-completion relies on this)', async () => {
+      bookingRepositoryMock.getOne.mockResolvedValue({
+        id: 1,
+        status: BOOKING_STATUS.CONFIRMED,
+        worker_id: 7,
+        start_time: '2020-01-06T02:00:00.000Z',
+        end_time: '2020-01-06T04:00:00.000Z',
+      });
+      const updatedBooking = { id: 1, status: BOOKING_STATUS.COMPLETED };
+      bookingRepositoryMock.update.mockResolvedValue(updatedBooking);
+
+      const result = await service.updateStatus(1, BOOKING_STATUS.COMPLETED);
+
+      expect(result).toBe(updatedBooking);
+    });
   });
 
   describe('transitioning to COMPLETED', () => {

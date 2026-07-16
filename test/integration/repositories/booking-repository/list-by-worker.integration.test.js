@@ -13,7 +13,7 @@ describe('BookingRepository.listByWorker (integration)', () => {
     rollback = undefined;
   });
 
-  it('returns only bookings for the given worker, sorted by start_time ascending', async () => {
+  it('returns only bookings for the given worker, sorted by start_time ascending, with pagination metadata', async () => {
     const ctx = await seedWithTransaction([
       {
         table: 'bookings',
@@ -23,13 +23,20 @@ describe('BookingRepository.listByWorker (integration)', () => {
     rollback = ctx.rollback;
 
     await ctx.run(async (transaction) => {
-      const bookings = await repository.listByWorker(fixtures.workerOnePending.worker_id, { transaction });
+      const { rows, count, page, limit, totalPages } = await repository.listByWorker(
+        fixtures.workerOnePending.worker_id,
+        { transaction }
+      );
 
-      expect(bookings.map((b) => b.id)).toEqual([
+      expect(rows.map((b) => b.id)).toEqual([
         fixtures.workerOnePending.id,
         fixtures.workerOneConfirmed.id,
         fixtures.workerOneLater.id,
       ]);
+      expect(count).toBe(3);
+      expect(page).toBe(1);
+      expect(limit).toBe(20);
+      expect(totalPages).toBe(1);
     });
   });
 
@@ -39,13 +46,13 @@ describe('BookingRepository.listByWorker (integration)', () => {
 
     await ctx.run(async (transaction) => {
       // window starts mid-way through the booking
-      const bookings = await repository.listByWorker(fixtures.workerOnePending.worker_id, {
+      const { rows } = await repository.listByWorker(fixtures.workerOnePending.worker_id, {
         from: '2026-08-01T09:30:00.000Z',
         to: '2026-08-01T12:00:00.000Z',
         transaction,
       });
 
-      expect(bookings.map((b) => b.id)).toEqual([fixtures.workerOnePending.id]);
+      expect(rows.map((b) => b.id)).toEqual([fixtures.workerOnePending.id]);
     });
   });
 
@@ -54,13 +61,13 @@ describe('BookingRepository.listByWorker (integration)', () => {
     rollback = ctx.rollback;
 
     await ctx.run(async (transaction) => {
-      const bookings = await repository.listByWorker(fixtures.workerOnePending.worker_id, {
+      const { rows } = await repository.listByWorker(fixtures.workerOnePending.worker_id, {
         from: '2026-09-01T00:00:00.000Z',
         to: '2026-09-02T00:00:00.000Z',
         transaction,
       });
 
-      expect(bookings).toEqual([]);
+      expect(rows).toEqual([]);
     });
   });
 
@@ -71,8 +78,30 @@ describe('BookingRepository.listByWorker (integration)', () => {
     rollback = ctx.rollback;
 
     await ctx.run(async (transaction) => {
-      const bookings = await repository.listByWorker(fixtures.workerOnePending.worker_id, { transaction });
-      expect(bookings).toHaveLength(2);
+      const { rows } = await repository.listByWorker(fixtures.workerOnePending.worker_id, { transaction });
+      expect(rows).toHaveLength(2);
+    });
+  });
+
+  it('honors an explicit page/limit', async () => {
+    const ctx = await seedWithTransaction([
+      { table: 'bookings', rows: [fixtures.workerOnePending, fixtures.workerOneConfirmed, fixtures.workerOneLater] },
+    ]);
+    rollback = ctx.rollback;
+
+    await ctx.run(async (transaction) => {
+      const { rows, page, limit, totalPages } = await repository.listByWorker(fixtures.workerOnePending.worker_id, {
+        page: 2,
+        limit: 1,
+        transaction,
+      });
+
+      // Sorted by start_time ascending: [workerOnePending, workerOneConfirmed, workerOneLater].
+      // Page 2 with limit 1 is the second row.
+      expect(rows.map((b) => b.id)).toEqual([fixtures.workerOneConfirmed.id]);
+      expect(page).toBe(2);
+      expect(limit).toBe(1);
+      expect(totalPages).toBe(3);
     });
   });
 });

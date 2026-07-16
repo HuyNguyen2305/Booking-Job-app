@@ -33,40 +33,53 @@ describe('GET /api/bookings (router + controller + error handler)', () => {
     jest.clearAllMocks();
   });
 
-  it('returns 200 with the worker schedule from the service', async () => {
-    const bookings = [{ id: 1 }, { id: 2 }];
-    bookingServiceMock.listByWorker.mockResolvedValue(bookings);
+  it('returns 200 with the paginated worker schedule from the service', async () => {
+    const paginated = { rows: [{ id: 1 }, { id: 2 }], count: 2, page: 1, limit: 20, totalPages: 1 };
+    bookingServiceMock.listByWorker.mockResolvedValue(paginated);
 
     const response = await app.inject({ method: 'GET', url: '/api/bookings?worker_id=5' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ success: true, message: 'Bookings retrieved', data: bookings });
-    expect(bookingServiceMock.listByWorker).toHaveBeenCalledWith(5, { from: undefined, to: undefined });
+    expect(response.json()).toEqual({ success: true, message: 'Bookings retrieved', data: paginated });
+    // Schema defaults (page:1, limit:20) apply even when omitted from the querystring.
+    expect(bookingServiceMock.listByWorker).toHaveBeenCalledWith(5, {
+      from: undefined,
+      to: undefined,
+      page: 1,
+      limit: 20,
+    });
   });
 
-  it('passes from/to querystring filters through to the service', async () => {
-    bookingServiceMock.listByWorker.mockResolvedValue([]);
+  it('passes from/to/page/limit querystring filters through to the service', async () => {
+    bookingServiceMock.listByWorker.mockResolvedValue({ rows: [], count: 0, page: 2, limit: 5, totalPages: 0 });
 
     await app.inject({
       method: 'GET',
-      url: '/api/bookings?worker_id=5&from=2026-08-01T00:00:00.000Z&to=2026-08-31T00:00:00.000Z',
+      url: '/api/bookings?worker_id=5&from=2026-08-01T00:00:00.000Z&to=2026-08-31T00:00:00.000Z&page=2&limit=5',
     });
 
     expect(bookingServiceMock.listByWorker).toHaveBeenCalledWith(5, {
       from: '2026-08-01T00:00:00.000Z',
       to: '2026-08-31T00:00:00.000Z',
+      page: 2,
+      limit: 5,
     });
   });
 
-  it('returns 200 with the customer schedule from the service when customer_id is given', async () => {
-    const bookings = [{ id: 3 }];
-    bookingServiceMock.listByCustomer.mockResolvedValue(bookings);
+  it('returns 200 with the paginated customer schedule from the service when customer_id is given', async () => {
+    const paginated = { rows: [{ id: 3 }], count: 1, page: 1, limit: 20, totalPages: 1 };
+    bookingServiceMock.listByCustomer.mockResolvedValue(paginated);
 
     const response = await app.inject({ method: 'GET', url: '/api/bookings?customer_id=601' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ success: true, message: 'Bookings retrieved', data: bookings });
-    expect(bookingServiceMock.listByCustomer).toHaveBeenCalledWith(601, { from: undefined, to: undefined });
+    expect(response.json()).toEqual({ success: true, message: 'Bookings retrieved', data: paginated });
+    expect(bookingServiceMock.listByCustomer).toHaveBeenCalledWith(601, {
+      from: undefined,
+      to: undefined,
+      page: 1,
+      limit: 20,
+    });
     expect(bookingServiceMock.listByWorker).not.toHaveBeenCalled();
   });
 

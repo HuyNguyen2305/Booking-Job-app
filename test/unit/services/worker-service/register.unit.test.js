@@ -6,6 +6,9 @@ const workerRepositoryMock = {
   create: jest.fn(),
 };
 
+const passwordUtilMock = { hashPassword: jest.fn() };
+jest.unstable_mockModule('#src/common/auth/password.util', () => passwordUtilMock);
+
 const { WorkerService } = await import('#services/worker.service');
 
 describe('WorkerService.register', () => {
@@ -17,13 +20,19 @@ describe('WorkerService.register', () => {
     service.workerRepository = workerRepositoryMock;
   });
 
-  it('creates a worker with the given name', async () => {
-    const created = { id: 1, name: 'Alice', is_active: true };
+  it('hashes the password and creates a worker with the given name/email', async () => {
+    const created = { id: 1, name: 'Alice', email: 'alice@example.com', is_active: true };
+    passwordUtilMock.hashPassword.mockResolvedValue('hashed-secret');
     workerRepositoryMock.create.mockResolvedValue(created);
 
-    const result = await service.register({ name: 'Alice' });
+    const result = await service.register({ name: 'Alice', email: 'alice@example.com', password: 'secret' });
 
-    expect(workerRepositoryMock.create).toHaveBeenCalledWith({ name: 'Alice' });
+    expect(passwordUtilMock.hashPassword).toHaveBeenCalledWith('secret');
+    expect(workerRepositoryMock.create).toHaveBeenCalledWith({
+      name: 'Alice',
+      email: 'alice@example.com',
+      password_hash: 'hashed-secret',
+    });
     expect(result).toBe(created);
   });
 });

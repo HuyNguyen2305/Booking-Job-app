@@ -1,10 +1,11 @@
-import { buildSuccessResponse } from '#common-schemas/response.schema';
+import { buildSuccessResponse, buildPaginatedResponse } from '#common-schemas/response.schema';
 
 const workerSchema = {
   type: 'object',
   properties: {
     id: { type: 'integer' },
     name: { type: 'string' },
+    email: { type: 'string' },
     is_active: { type: 'boolean' },
   },
 };
@@ -64,11 +65,14 @@ export const listAvailableWorkersSchema = {
 export const registerWorkerSchema = {
   tags: ['Workers'],
   summary: 'Register a new worker',
+  description: 'Admin-only staff onboarding. The initial password is chosen by the admin and relayed to the worker out-of-band.',
   body: {
     type: 'object',
-    required: ['name'],
+    required: ['name', 'email', 'password'],
     properties: {
       name: { type: 'string', minLength: 1 },
+      email: { type: 'string', format: 'email' },
+      password: { type: 'string', minLength: 1 },
     },
   },
   response: {
@@ -78,9 +82,16 @@ export const registerWorkerSchema = {
 
 export const listWorkersSchema = {
   tags: ['Workers'],
-  summary: 'List all registered workers',
+  summary: 'List registered workers (paginated)',
+  querystring: {
+    type: 'object',
+    properties: {
+      page: { type: 'integer', minimum: 1, default: 1 },
+      limit: { type: 'integer', minimum: 1, default: 20 },
+    },
+  },
   response: {
-    200: buildSuccessResponse({ type: 'array', items: workerSchema }),
+    200: buildPaginatedResponse(workerSchema),
   },
 };
 

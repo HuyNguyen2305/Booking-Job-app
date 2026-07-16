@@ -3,6 +3,7 @@ export const REPOSITORY_KEYS = {
   WORKER: 'workerRepository',
   HOLIDAY: 'holidayRepository',
   CUSTOMER: 'customerRepository',
+  ADMIN: 'adminRepository',
 };
 
 export const SERVICE_KEYS = {
@@ -11,6 +12,8 @@ export const SERVICE_KEYS = {
   WORKER: 'workerService',
   HOLIDAY: 'holidayService',
   CUSTOMER: 'customerService',
+  ADMIN: 'adminService',
+  AUTH: 'authService',
 };
 
 export const CONTROLLER_KEYS = {
@@ -18,4 +21,5 @@ export const CONTROLLER_KEYS = {
   WORKER: 'workerController',
   HOLIDAY: 'holidayController',
   CUSTOMER: 'customerController',
+  AUTH: 'authController',
 };

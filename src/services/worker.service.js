@@ -5,6 +5,7 @@ import { BOOKING_ERROR_CODES } from '#constants/error-codes.const';
 import { BUSINESS_TZ, WEEKLY_HOURS_CAP } from '#constants/business-hours.const';
 import { parseTimestampWithOffset, toBusinessLocalDayBoundsUtc, toBusinessLocalWeekBoundsUtc } from '#utils/date.util';
 import { rankAvailableWorkers } from '#utils/worker-availability.util';
+import { hashPassword } from '#src/common/auth/password.util';
 import { sequelize } from '#models/index';
 
 export class WorkerService {
@@ -32,12 +33,13 @@ export class WorkerService {
     return rankAvailableWorkers(rows);
   }
 
-  async register({ name }) {
-    return this.workerRepository.create({ name });
+  async register({ name, email, password }) {
+    const password_hash = await hashPassword(password);
+    return this.workerRepository.create({ name, email, password_hash });
   }
 
-  async list() {
-    return this.workerRepository.get({ order: [['id', 'ASC']] });
+  async list({ page, limit } = {}) {
+    return this.workerRepository.pagination({ order: [['id', 'ASC']], page, limit });
   }
 
   /**

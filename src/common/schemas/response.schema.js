@@ -9,3 +9,17 @@ export function buildSuccessResponse(dataSchema) {
     },
   };
 }
+
+/** Shape returned by BaseRepository.pagination: { rows, count, page, limit, totalPages }. */
+export function buildPaginatedResponse(itemSchema) {
+  return buildSuccessResponse({
+    type: 'object',
+    properties: {
+      rows: { type: 'array', items: itemSchema },
+      count: { type: 'integer' },
+      page: { type: 'integer' },
+      limit: { type: 'integer' },
+      totalPages: { type: 'integer' },
+    },
+  });
+}

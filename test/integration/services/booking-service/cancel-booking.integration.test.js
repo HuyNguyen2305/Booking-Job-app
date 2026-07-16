@@ -56,4 +56,21 @@ describe('BookingService.cancelBooking (integration)', () => {
     const persisted = await Booking.findByPk(booking.id);
     expect(persisted.status).toBe('COMPLETED');
   });
+
+  it('rejects cancelling a booking whose start_time has already passed, leaving it untouched', async () => {
+    // Fixed past date (not relative to "now") so this stays a valid past booking
+    // indefinitely. 02:00-04:00 UTC = 09:00-11:00 local (Asia/Ho_Chi_Minh, UTC+7) on a
+    // Monday, within business hours — same pattern used elsewhere in this suite for
+    // past-but-DB-constraint-valid fixtures.
+    const slot = { start_time: new Date('2020-01-06T02:00:00.000Z'), end_time: new Date('2020-01-06T04:00:00.000Z') };
+    const booking = await Booking.create({ worker_id: 999903, customer_id: 1, ...slot, status: 'CONFIRMED' });
+    bookingIds.push(booking.id);
+
+    const bookingService = buildService();
+
+    await expect(bookingService.cancelBooking(booking.id)).rejects.toMatchObject({ code: 'PAST_BOOKING_TIME' });
+
+    const persisted = await Booking.findByPk(booking.id);
+    expect(persisted.status).toBe('CONFIRMED');
+  });
 });

@@ -1,4 +1,6 @@
 import { CONTROLLER_KEYS } from '#constants/singleton';
+import { ROLES } from '#constants/role.const';
+import { requireRole } from '#src/common/auth/require-role';
 import {
   createHolidaySchema,
   createHolidayRangeSchema,
@@ -18,6 +20,7 @@ class HolidayRouter {
       url: '/api/holidays',
       schema: createHolidaySchema,
       config: { responseFormat: 'standard' },
+      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN)],
       handler: this.holidayController.create.bind(this.holidayController),
     });
 
@@ -26,6 +29,7 @@ class HolidayRouter {
       url: '/api/holidays/range',
       schema: createHolidayRangeSchema,
       config: { responseFormat: 'standard' },
+      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN)],
       handler: this.holidayController.createRange.bind(this.holidayController),
     });
 
@@ -34,6 +38,7 @@ class HolidayRouter {
       url: '/api/holidays',
       schema: listHolidaysSchema,
       config: { responseFormat: 'standard' },
+      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN, ROLES.WORKER, ROLES.CUSTOMER)],
       handler: this.holidayController.list.bind(this.holidayController),
     });
 
@@ -42,6 +47,7 @@ class HolidayRouter {
       url: '/api/holidays/:id',
       schema: deleteHolidaySchema,
       config: { responseFormat: 'standard' },
+      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN)],
       handler: this.holidayController.remove.bind(this.holidayController),
     });
   }

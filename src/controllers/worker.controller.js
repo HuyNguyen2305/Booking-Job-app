@@ -1,4 +1,6 @@
 import { SERVICE_KEYS } from '#constants/singleton';
+import { ROLES } from '#constants/role.const';
+import { assertOwnership } from '#src/common/auth/assert-ownership';
 
 export class WorkerController {
   constructor({ container }) {
@@ -18,7 +20,8 @@ export class WorkerController {
   }
 
   async list(request, reply) {
-    const workers = await this.workerService.list();
+    const { page, limit } = request.query;
+    const workers = await this.workerService.list({ page, limit });
     return reply.send({ success: true, message: 'Workers retrieved', data: workers });
   }
 
@@ -28,7 +31,9 @@ export class WorkerController {
   }
 
   async getById(request, reply) {
-    const worker = await this.workerService.getById(Number(request.params.id));
+    const id = Number(request.params.id);
+    assertOwnership(request.user, { role: ROLES.WORKER, ownerId: id });
+    const worker = await this.workerService.getById(id);
     return reply.send({ success: true, message: 'Worker retrieved', data: worker });
   }
 }

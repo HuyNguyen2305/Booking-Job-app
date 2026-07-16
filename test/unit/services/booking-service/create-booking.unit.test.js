@@ -33,7 +33,7 @@ describe('BookingService.createBooking', () => {
     jest.clearAllMocks();
     sequelizeMock.transaction.mockImplementation((callback) => callback('mock-transaction'));
     workerRepositoryMock.listActive.mockResolvedValue([]);
-    customerRepositoryMock.getOne.mockResolvedValue({ id: 2, name: 'Alice' });
+    customerRepositoryMock.getOne.mockResolvedValue({ id: 2, name: 'Alice', is_active: true });
     bookingAvailabilityServiceMock.checkSlotRules.mockResolvedValue({ ok: true });
 
     service = Object.create(BookingService.prototype);
@@ -64,6 +64,16 @@ describe('BookingService.createBooking', () => {
       code: BOOKING_ERROR_CODES.CUSTOMER_NOT_FOUND,
     });
     expect(customerRepositoryMock.getOne).toHaveBeenCalledWith({ where: { id: payload.customer_id } });
+    expect(bookingAvailabilityServiceMock.checkSlotRules).not.toHaveBeenCalled();
+    expect(bookingRepositoryMock.create).not.toHaveBeenCalled();
+  });
+
+  it('throws ValidationError with CUSTOMER_NOT_FOUND when the customer has been deleted (is_active: false)', async () => {
+    customerRepositoryMock.getOne.mockResolvedValue({ id: 2, name: 'Alice', is_active: false });
+
+    await expect(service.createBooking(payload)).rejects.toMatchObject({
+      code: BOOKING_ERROR_CODES.CUSTOMER_NOT_FOUND,
+    });
     expect(bookingAvailabilityServiceMock.checkSlotRules).not.toHaveBeenCalled();
     expect(bookingRepositoryMock.create).not.toHaveBeenCalled();
   });

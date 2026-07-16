@@ -6,6 +6,9 @@ export class Customer extends Model {
       {
         id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
         name: { type: DataTypes.STRING, allowNull: false },
+        email: { type: DataTypes.STRING, allowNull: true, unique: true },
+        password_hash: { type: DataTypes.STRING, allowNull: true },
+        is_active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
       },
       {
         sequelize,

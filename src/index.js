@@ -7,13 +7,21 @@ import Swagger from '@fastify/swagger';
 import SwaggerUI from '@fastify/swagger-ui';
 import { buildContainer } from '#src/container';
 import { CustomError } from '#configs/error';
+import { SERVICE_KEYS } from '#constants/singleton';
+import { isAuthEnforced } from '#src/common/auth/env';
+import authenticatePlugin from '#src/common/auth/authenticate.plugin';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export async function buildApp(opts = {}) {
+  if (isAuthEnforced() && !process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET must be set when NODE_ENV=production');
+  }
+
   const fastify = Fastify({ logger: true, ...opts });
 
   fastify.decorate('container', buildContainer());
+  await fastify.register(authenticatePlugin);
 
   fastify.setErrorHandler((error, request, reply) => {
     if (error.validation) {
@@ -51,7 +59,13 @@ export async function buildApp(opts = {}) {
         { name: 'Workers', description: 'Worker roster and availability endpoints' },
         { name: 'Holidays', description: 'Company holiday admin endpoints' },
         { name: 'Customers', description: 'Customer roster endpoints' },
+        { name: 'Auth', description: 'Login endpoints (admin/worker/customer)' },
       ],
+      components: {
+        securitySchemes: {
+          bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+        },
+      },
     },
   });
 
@@ -71,4 +85,12 @@ export async function buildApp(opts = {}) {
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const app = await buildApp();
   await app.listen({ port: Number(process.env.PORT ?? 3000), host: '0.0.0.0' });
+
+  // Only started for the real, listening server — never during buildApp() alone, which
+  // every test file also calls via app.inject() without ever reaching this branch.
+  const sweepIntervalMs = Number(process.env.AUTO_COMPLETE_INTERVAL_MS ?? 5 * 60 * 1000);
+  const bookingService = app.container.resolve(SERVICE_KEYS.BOOKING);
+  setInterval(() => {
+    bookingService.autoCompletePastBookings().catch((err) => app.log.error(err));
+  }, sweepIntervalMs).unref();
 }

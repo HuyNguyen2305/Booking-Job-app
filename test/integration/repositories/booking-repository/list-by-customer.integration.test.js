@@ -29,11 +29,10 @@ describe('BookingRepository.listByCustomer (integration)', () => {
     rollback = ctx.rollback;
 
     await ctx.run(async (transaction) => {
-      const bookings = await repository.listByCustomer(fixtures.workerOnePending.customer_id, { transaction });
+      const { rows, count } = await repository.listByCustomer(fixtures.workerOnePending.customer_id, { transaction });
 
-      expect(bookings.map((b) => b.id).sort()).toEqual(
-        [fixtures.workerOnePending.id, fixtures.workerTwoPending.id].sort()
-      );
+      expect(rows.map((b) => b.id).sort()).toEqual([fixtures.workerOnePending.id, fixtures.workerTwoPending.id].sort());
+      expect(count).toBe(2);
     });
   });
 
@@ -42,13 +41,13 @@ describe('BookingRepository.listByCustomer (integration)', () => {
     rollback = ctx.rollback;
 
     await ctx.run(async (transaction) => {
-      const bookings = await repository.listByCustomer(fixtures.workerOnePending.customer_id, {
+      const { rows } = await repository.listByCustomer(fixtures.workerOnePending.customer_id, {
         from: '2026-08-01T09:30:00.000Z',
         to: '2026-08-01T12:00:00.000Z',
         transaction,
       });
 
-      expect(bookings.map((b) => b.id)).toEqual([fixtures.workerOnePending.id]);
+      expect(rows.map((b) => b.id)).toEqual([fixtures.workerOnePending.id]);
     });
   });
 
@@ -57,13 +56,13 @@ describe('BookingRepository.listByCustomer (integration)', () => {
     rollback = ctx.rollback;
 
     await ctx.run(async (transaction) => {
-      const bookings = await repository.listByCustomer(fixtures.workerOnePending.customer_id, {
+      const { rows } = await repository.listByCustomer(fixtures.workerOnePending.customer_id, {
         from: '2026-09-01T00:00:00.000Z',
         to: '2026-09-02T00:00:00.000Z',
         transaction,
       });
 
-      expect(bookings).toEqual([]);
+      expect(rows).toEqual([]);
     });
   });
 
@@ -74,8 +73,8 @@ describe('BookingRepository.listByCustomer (integration)', () => {
     rollback = ctx.rollback;
 
     await ctx.run(async (transaction) => {
-      const bookings = await repository.listByCustomer(fixtures.workerOnePending.customer_id, { transaction });
-      expect(bookings).toHaveLength(2);
+      const { rows } = await repository.listByCustomer(fixtures.workerOnePending.customer_id, { transaction });
+      expect(rows).toHaveLength(2);
     });
   });
 });

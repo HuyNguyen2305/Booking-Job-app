@@ -31,13 +31,21 @@ describe('GET /api/customers (router + controller)', () => {
     jest.clearAllMocks();
   });
 
-  it('returns 200 with the full customer roster', async () => {
-    const customers = [{ id: 1, name: 'Alice' }];
-    customerServiceMock.list.mockResolvedValue(customers);
+  it('returns 200 with a paginated customer roster', async () => {
+    const paginated = { rows: [{ id: 1, name: 'Alice' }], count: 1, page: 1, limit: 20, totalPages: 1 };
+    customerServiceMock.list.mockResolvedValue(paginated);
 
     const response = await app.inject({ method: 'GET', url: '/api/customers' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ success: true, message: 'Customers retrieved', data: customers });
+    expect(response.json()).toEqual({ success: true, message: 'Customers retrieved', data: paginated });
+  });
+
+  it('passes page/limit querystring params through to the service', async () => {
+    customerServiceMock.list.mockResolvedValue({ rows: [], count: 0, page: 2, limit: 5, totalPages: 0 });
+
+    await app.inject({ method: 'GET', url: '/api/customers?page=2&limit=5' });
+
+    expect(customerServiceMock.list).toHaveBeenCalledWith({ page: 2, limit: 5 });
   });
 });

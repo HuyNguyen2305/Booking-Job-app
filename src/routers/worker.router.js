@@ -1,4 +1,6 @@
 import { CONTROLLER_KEYS } from '#constants/singleton';
+import { ROLES } from '#constants/role.const';
+import { requireRole } from '#src/common/auth/require-role';
 import {
   listAvailableWorkersSchema,
   registerWorkerSchema,
@@ -19,6 +21,7 @@ class WorkerRouter {
       url: '/api/workers/available',
       schema: listAvailableWorkersSchema,
       config: { responseFormat: 'standard' },
+      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN, ROLES.CUSTOMER)],
       handler: this.workerController.listAvailable.bind(this.workerController),
     });
 
@@ -27,6 +30,7 @@ class WorkerRouter {
       url: '/api/workers',
       schema: registerWorkerSchema,
       config: { responseFormat: 'standard' },
+      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN)],
       handler: this.workerController.register.bind(this.workerController),
     });
 
@@ -35,6 +39,7 @@ class WorkerRouter {
       url: '/api/workers',
       schema: listWorkersSchema,
       config: { responseFormat: 'standard' },
+      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN)],
       handler: this.workerController.list.bind(this.workerController),
     });
 
@@ -43,6 +48,7 @@ class WorkerRouter {
       url: '/api/workers/:id',
       schema: updateWorkerStatusSchema,
       config: { responseFormat: 'standard' },
+      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN)],
       handler: this.workerController.updateStatus.bind(this.workerController),
     });
 
@@ -51,6 +57,7 @@ class WorkerRouter {
       url: '/api/workers/:id',
       schema: getWorkerSchema,
       config: { responseFormat: 'standard' },
+      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN, ROLES.WORKER)],
       handler: this.workerController.getById.bind(this.workerController),
     });
   }

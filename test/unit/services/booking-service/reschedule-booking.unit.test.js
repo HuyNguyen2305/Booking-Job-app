@@ -1,4 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import { DateTime } from 'luxon';
 
 const bookingRepositoryMock = {
   getOne: jest.fn(),
@@ -54,6 +55,25 @@ describe('BookingService.rescheduleBooking', () => {
     expect(bookingAvailabilityServiceMock.checkSlotRules).not.toHaveBeenCalled();
   });
 
+  it('throws ConflictError with PAST_BOOKING_TIME when the booking\'s current start_time has already passed', async () => {
+    // The worker is presumably already working the job (or done) once its original
+    // start_time has passed — rescheduling it to a new time at that point doesn't
+    // make sense, regardless of what new window is requested.
+    bookingRepositoryMock.getOne.mockResolvedValue({
+      id: 1,
+      worker_id: 5,
+      status: BOOKING_STATUS.PENDING,
+      start_time: new Date('2020-01-06T09:00:00+07:00'),
+      end_time: new Date('2020-01-06T09:30:00+07:00'),
+    });
+
+    await expect(service.rescheduleBooking(1, newWindow)).rejects.toMatchObject({
+      code: BOOKING_ERROR_CODES.PAST_BOOKING_TIME,
+    });
+    expect(bookingAvailabilityServiceMock.checkSlotRules).not.toHaveBeenCalled();
+    expect(bookingRepositoryMock.update).not.toHaveBeenCalled();
+  });
+
   it('throws with the slot-rule code when the new window violates a calendar rule', async () => {
     bookingRepositoryMock.getOne.mockResolvedValue({ id: 1, worker_id: 5, status: BOOKING_STATUS.PENDING });
     bookingAvailabilityServiceMock.checkSlotRules.mockResolvedValue({
@@ -89,8 +109,10 @@ describe('BookingService.rescheduleBooking', () => {
       id: 1,
       worker_id: 5,
       status: BOOKING_STATUS.PENDING,
-      start_time: '2026-07-14T09:00:00+07:00',
-      end_time: '2026-07-14T09:30:00+07:00',
+      // Computed relative to the real clock (not a hardcoded date) so this stays a
+      // valid "not yet passed" booking indefinitely.
+      start_time: DateTime.now().plus({ days: 30 }).toISO(),
+      end_time: DateTime.now().plus({ days: 30 }).plus({ minutes: 30 }).toISO(),
     });
     workerRepositoryMock.listActive.mockResolvedValue([{ id: 5 }, { id: 6 }]);
     workerRepositoryMock.getAvailability.mockResolvedValue([{ worker_id: 6, has_overlap: false, booked_hours: 0 }]);
@@ -110,12 +132,17 @@ describe('BookingService.rescheduleBooking', () => {
   });
 
   describe('CONFIRMED status handling', () => {
+    // Anchored to the real clock (not a hardcoded date) so these stay valid
+    // "not yet passed" bookings indefinitely — only the relative offsets between
+    // these timestamps matter for _resolveRescheduleStatus's window-containment logic.
+    const FUTURE_BASE = DateTime.now().plus({ days: 30 }).set({ hour: 2, minute: 0, second: 0, millisecond: 0 });
+
     const confirmedBooking = {
       id: 1,
       worker_id: 5,
       status: BOOKING_STATUS.CONFIRMED,
-      start_time: '2026-07-10T02:00:00.000Z',
-      end_time: '2026-07-10T10:00:00.000Z',
+      start_time: FUTURE_BASE.toISO(),
+      end_time: FUTURE_BASE.plus({ hours: 8 }).toISO(),
     };
 
     beforeEach(() => {
@@ -128,7 +155,7 @@ describe('BookingService.rescheduleBooking', () => {
 
     it('keeps CONFIRMED when the new window stays fully within the previously confirmed window', async () => {
       bookingRepositoryMock.getOne.mockResolvedValue(confirmedBooking);
-      const shrunkWindow = { start_time: '2026-07-10T02:00:00.000Z', end_time: '2026-07-10T07:00:00.000Z' };
+      const shrunkWindow = { start_time: FUTURE_BASE.toISO(), end_time: FUTURE_BASE.plus({ hours: 5 }).toISO() };
 
       const result = await service.rescheduleBooking(1, shrunkWindow);
 
@@ -147,10 +174,13 @@ describe('BookingService.rescheduleBooking', () => {
       // this new time was ever confirmed.
       bookingRepositoryMock.getOne.mockResolvedValue({
         ...confirmedBooking,
-        start_time: '2026-07-10T02:00:00.000Z',
-        end_time: '2026-07-10T07:00:00.000Z',
+        start_time: FUTURE_BASE.toISO(),
+        end_time: FUTURE_BASE.plus({ hours: 5 }).toISO(),
       });
-      const shiftedWindow = { start_time: '2026-07-10T07:00:00.000Z', end_time: '2026-07-10T10:00:00.000Z' };
+      const shiftedWindow = {
+        start_time: FUTURE_BASE.plus({ hours: 5 }).toISO(),
+        end_time: FUTURE_BASE.plus({ hours: 8 }).toISO(),
+      };
 
       const result = await service.rescheduleBooking(1, shiftedWindow);
 
@@ -167,7 +197,10 @@ describe('BookingService.rescheduleBooking', () => {
         ...confirmedBooking,
         status: BOOKING_STATUS.PENDING,
       });
-      const expandedWindow = { start_time: '2026-07-10T01:00:00.000Z', end_time: '2026-07-10T11:00:00.000Z' };
+      const expandedWindow = {
+        start_time: FUTURE_BASE.minus({ hours: 1 }).toISO(),
+        end_time: FUTURE_BASE.plus({ hours: 9 }).toISO(),
+      };
 
       const result = await service.rescheduleBooking(1, expandedWindow);
 

@@ -1,9 +1,12 @@
 import { CONTROLLER_KEYS } from '#constants/singleton';
+import { ROLES } from '#constants/role.const';
+import { requireRole } from '#src/common/auth/require-role';
 import {
   registerCustomerSchema,
   listCustomersSchema,
   updateCustomerSchema,
   getCustomerSchema,
+  deleteCustomerSchema,
 } from '#schemas/customer.schema';
 
 class CustomerRouter {
@@ -26,6 +29,7 @@ class CustomerRouter {
       url: '/api/customers',
       schema: listCustomersSchema,
       config: { responseFormat: 'standard' },
+      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN)],
       handler: this.customerController.list.bind(this.customerController),
     });
 
@@ -34,6 +38,7 @@ class CustomerRouter {
       url: '/api/customers/:id',
       schema: updateCustomerSchema,
       config: { responseFormat: 'standard' },
+      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN, ROLES.CUSTOMER)],
       handler: this.customerController.updateName.bind(this.customerController),
     });
 
@@ -42,7 +47,17 @@ class CustomerRouter {
       url: '/api/customers/:id',
       schema: getCustomerSchema,
       config: { responseFormat: 'standard' },
+      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN, ROLES.CUSTOMER)],
       handler: this.customerController.getById.bind(this.customerController),
+    });
+
+    this.fastify.route({
+      method: 'DELETE',
+      url: '/api/customers/:id',
+      schema: deleteCustomerSchema,
+      config: { responseFormat: 'standard' },
+      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN)],
+      handler: this.customerController.remove.bind(this.customerController),
     });
   }
 }

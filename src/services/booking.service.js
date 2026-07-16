@@ -36,7 +36,9 @@ export class BookingService {
     }
 
     const customer = await this.customerRepository.getOne({ where: { id: customer_id } });
-    if (!customer) {
+    // A deleted (is_active: false) customer is treated as not found for booking purposes —
+    // deletion should mean new bookings can't be created against them either.
+    if (!customer || !customer.is_active) {
       throw new ValidationError('Customer not found', { code: BOOKING_ERROR_CODES.CUSTOMER_NOT_FOUND });
     }
 
@@ -79,6 +81,11 @@ export class BookingService {
     }
     if (!ACTIVE_BOOKING_STATUSES.includes(booking.status)) {
       throw new ConflictError(`Cannot reschedule a booking with status ${booking.status}`);
+    }
+    if (new Date(booking.start_time) < new Date()) {
+      throw new ConflictError('Cannot reschedule a booking whose time has already passed', {
+        code: BOOKING_ERROR_CODES.PAST_BOOKING_TIME,
+      });
     }
 
     const slotCheck = await this.bookingAvailabilityService.checkSlotRules(start_time, end_time);
@@ -124,6 +131,23 @@ export class BookingService {
       throw new ConflictError(`Cannot transition booking from ${booking.status} to ${nextStatus}`);
     }
 
+    // A CONFIRMED booking means a worker actually committed to it — once its start_time
+    // has passed they're presumably already working it (or done), so cancelling doesn't
+    // make sense. Scoped to CONFIRMED specifically: a PENDING booking was never confirmed
+    // by anyone, so it stays cancellable regardless of timing (e.g. cleaning up stale
+    // PENDING bookings when a customer is deleted). Also scoped to CANCELLED only:
+    // COMPLETED must still be reachable for past bookings (that's the whole point of
+    // autoCompletePastBookings), so this can't be a blanket past-time check on updateStatus.
+    if (
+      nextStatus === BOOKING_STATUS.CANCELLED &&
+      booking.status === BOOKING_STATUS.CONFIRMED &&
+      new Date(booking.start_time) < new Date()
+    ) {
+      throw new ConflictError('Cannot cancel a booking whose time has already passed', {
+        code: BOOKING_ERROR_CODES.PAST_BOOKING_TIME,
+      });
+    }
+
     if (nextStatus === BOOKING_STATUS.COMPLETED) {
       // COMPLETED is terminal (never transitioned out of), so this hour count is
       // added to workers.total_hours exactly once, atomically, in the same
@@ -150,12 +174,62 @@ export class BookingService {
     return this.updateStatus(id, BOOKING_STATUS.CANCELLED);
   }
 
-  async listByWorker(workerId, { from, to } = {}) {
-    return this.bookingRepository.listByWorker(workerId, { from, to });
+  /**
+   * Cancels every PENDING/CONFIRMED booking for a customer being deleted, via the same
+   * validated cancelBooking path. A CONFIRMED booking currently in progress (or already
+   * elapsed but not yet auto-completed) is protected by updateStatus's own guard and left
+   * untouched rather than cancelled out from under the worker; PENDING bookings are always
+   * cancelled regardless of timing, since nobody ever committed to working them. Each
+   * booking is handled independently — one being protected isn't a failure, so there's no
+   * shared transaction/rollback here (contrast reassignBookingsFromWorker, where a single
+   * unreassignable booking really does need to undo the whole batch).
+   */
+  async cancelBookingsForCustomer(customerId) {
+    const bookings = await this.bookingRepository.listActiveForCustomer(customerId);
+    const cancelled = [];
+    const skipped = [];
+
+    for (const booking of bookings) {
+      try {
+        await this.cancelBooking(booking.id);
+        cancelled.push(booking.id);
+      } catch (err) {
+        skipped.push({ booking_id: booking.id, reason: err.message });
+      }
+    }
+
+    return { cancelled_booking_ids: cancelled, skipped_booking_ids: skipped };
   }
 
-  async listByCustomer(customerId, { from, to } = {}) {
-    return this.bookingRepository.listByCustomer(customerId, { from, to });
+  /**
+   * Sweeps CONFIRMED bookings whose end_time has already passed and completes each one
+   * via updateStatus — reusing its existing atomic status+total_hours transaction rather
+   * than reimplementing it. Each booking gets its own transaction (through updateStatus),
+   * so one failure doesn't block the rest of the sweep; failures are collected, not thrown.
+   */
+  async autoCompletePastBookings() {
+    const dueBookings = await this.bookingRepository.listPastConfirmed();
+    const completed = [];
+    const failed = [];
+
+    for (const booking of dueBookings) {
+      try {
+        await this.updateStatus(booking.id, BOOKING_STATUS.COMPLETED);
+        completed.push(booking.id);
+      } catch (err) {
+        failed.push({ booking_id: booking.id, message: err.message });
+      }
+    }
+
+    return { completed, failed };
+  }
+
+  async listByWorker(workerId, { from, to, page, limit } = {}) {
+    return this.bookingRepository.listByWorker(workerId, { from, to, page, limit });
+  }
+
+  async listByCustomer(customerId, { from, to, page, limit } = {}) {
+    return this.bookingRepository.listByCustomer(customerId, { from, to, page, limit });
   }
 
   async getById(id) {
