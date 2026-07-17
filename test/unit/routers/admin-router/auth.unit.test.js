@@ -135,6 +135,12 @@ describe('Admin router auth enforcement (NODE_ENV=production)', () => {
   });
 
   it('PATCH /api/admins/:id returns 400 when an ADMIN tries to deactivate their own account', async () => {
+    const { ValidationError } = await import('#configs/error');
+    // The self-deactivation guard now lives in AdminService, not the controller, so the
+    // mock must reproduce what the real service would do — the controller itself no
+    // longer short-circuits before calling it.
+    adminServiceMock.updateStatus.mockRejectedValue(new ValidationError('Cannot deactivate your own admin account'));
+
     const response = await app.inject({
       method: 'PATCH',
       url: '/api/admins/1', // matches adminToken's own id
@@ -144,7 +150,7 @@ describe('Admin router auth enforcement (NODE_ENV=production)', () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({ success: false, message: 'Cannot deactivate your own admin account' });
-    expect(adminServiceMock.updateStatus).not.toHaveBeenCalled();
+    expect(adminServiceMock.updateStatus).toHaveBeenCalledWith(1, false, { callerId: 1 });
   });
 
   it('PATCH /api/admins/:id allows an ADMIN to deactivate a different admin', async () => {
@@ -159,7 +165,7 @@ describe('Admin router auth enforcement (NODE_ENV=production)', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(adminServiceMock.updateStatus).toHaveBeenCalledWith(2, false);
+    expect(adminServiceMock.updateStatus).toHaveBeenCalledWith(2, false, { callerId: 1 });
   });
 
   it('PATCH /api/admins/:id allows an ADMIN to reactivate their own account (guard only blocks self-deactivation)', async () => {
@@ -174,7 +180,7 @@ describe('Admin router auth enforcement (NODE_ENV=production)', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(adminServiceMock.updateStatus).toHaveBeenCalledWith(1, true);
+    expect(adminServiceMock.updateStatus).toHaveBeenCalledWith(1, true, { callerId: 1 });
   });
 
   it('two different ADMIN accounts can each deactivate the other', async () => {
@@ -188,6 +194,6 @@ describe('Admin router auth enforcement (NODE_ENV=production)', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(adminServiceMock.updateStatus).toHaveBeenCalledWith(1, false);
+    expect(adminServiceMock.updateStatus).toHaveBeenCalledWith(1, false, { callerId: 2 });
   });
 });

@@ -198,6 +198,73 @@ describe('Booking router auth enforcement (NODE_ENV=production)', () => {
     expect(bookingServiceMock.updateStatus).not.toHaveBeenCalled();
   });
 
+  it('PATCH /api/bookings/:id/status returns 409 (not 403) when the assigned WORKER targets PENDING, an always-invalid transition with no mapped owner role', async () => {
+    const { ConflictError } = await import('#configs/error');
+    bookingServiceMock.getById.mockResolvedValue({ id: 10, worker_id: 2, customer_id: 5 });
+    bookingServiceMock.updateStatus.mockRejectedValue(
+      new ConflictError('Cannot transition booking from CONFIRMED to PENDING')
+    );
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/bookings/10/status',
+      headers: { authorization: `Bearer ${workerToken}` },
+      payload: { status: 'PENDING' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    // No mapped owner role for PENDING, but the caller must still be SOME owner of the
+    // booking (worker or customer) — proven by getById being called and the request
+    // reaching the service's transition-table check only because worker_id matches.
+    expect(bookingServiceMock.getById).toHaveBeenCalled();
+    expect(bookingServiceMock.updateStatus).toHaveBeenCalledWith(10, 'PENDING');
+  });
+
+  it('PATCH /api/bookings/:id/status returns 409 (not 403) when the owning CUSTOMER targets PENDING', async () => {
+    const { ConflictError } = await import('#configs/error');
+    bookingServiceMock.getById.mockResolvedValue({ id: 10, worker_id: 2, customer_id: 5 });
+    bookingServiceMock.updateStatus.mockRejectedValue(
+      new ConflictError('Cannot transition booking from CONFIRMED to PENDING')
+    );
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/bookings/10/status',
+      headers: { authorization: `Bearer ${customerToken}` },
+      payload: { status: 'PENDING' },
+    });
+
+    expect(response.statusCode).toBe(409);
+  });
+
+  it('PATCH /api/bookings/:id/status returns 403 when a non-owning WORKER targets PENDING (can\'t probe an unrelated booking)', async () => {
+    bookingServiceMock.getById.mockResolvedValue({ id: 10, worker_id: 999, customer_id: 5 });
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/bookings/10/status',
+      headers: { authorization: `Bearer ${workerToken}` },
+      payload: { status: 'PENDING' },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(bookingServiceMock.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('PATCH /api/bookings/:id/status returns 403 when a non-owning CUSTOMER targets PENDING (can\'t probe an unrelated booking)', async () => {
+    bookingServiceMock.getById.mockResolvedValue({ id: 10, worker_id: 2, customer_id: 999 });
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/bookings/10/status',
+      headers: { authorization: `Bearer ${customerToken}` },
+      payload: { status: 'PENDING' },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(bookingServiceMock.updateStatus).not.toHaveBeenCalled();
+  });
+
   it('PATCH /api/bookings/:id/status returns 403 when a non-owning CUSTOMER targets COMPLETED', async () => {
     bookingServiceMock.getById.mockResolvedValue({ id: 10, worker_id: 2, customer_id: 999 });
 

@@ -39,7 +39,7 @@ describe('PATCH /api/admins/:id (router + controller + error handler)', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ success: true, message: 'Admin status updated', data: admin });
-    expect(adminServiceMock.updateStatus).toHaveBeenCalledWith(2, false);
+    expect(adminServiceMock.updateStatus).toHaveBeenCalledWith(2, false, { callerId: null });
   });
 
   it('returns 404 in the custom error shape when the admin does not exist', async () => {

@@ -1,8 +1,7 @@
 import { REPOSITORY_KEYS, SERVICE_KEYS } from '#constants/singleton';
-import { NotFoundError, ConflictError } from '#configs/error';
-import { ACCOUNT_ERROR_CODES } from '#constants/error-codes.const';
-import { isUniqueConstraintError } from '#utils/sequelize-error.util';
+import { NotFoundError } from '#configs/error';
 import { buildAccountSearchWhere } from '#utils/account-search.util';
+import { createAccountOrThrowConflict } from '#utils/account-create.util';
 import { hashPassword } from '#src/common/auth/password.util';
 
 export class CustomerService {
@@ -13,14 +12,7 @@ export class CustomerService {
 
   async register({ name, email, password, address }) {
     const password_hash = await hashPassword(password);
-    try {
-      return await this.customerRepository.create({ name, email, password_hash, address });
-    } catch (err) {
-      if (isUniqueConstraintError(err)) {
-        throw new ConflictError('Email already registered', { code: ACCOUNT_ERROR_CODES.EMAIL_ALREADY_REGISTERED });
-      }
-      throw err;
-    }
+    return createAccountOrThrowConflict(this.customerRepository, { name, email, password_hash, address });
   }
 
   async list({ page, limit, name, email, is_active } = {}) {

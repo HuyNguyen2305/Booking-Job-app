@@ -1,4 +1,5 @@
 import { buildSuccessResponse, buildPaginatedResponse } from '#common-schemas/response.schema';
+import { varcharField } from '#common-schemas/field.schema';
 
 const customerSchema = {
   type: 'object',
@@ -18,10 +19,10 @@ export const registerCustomerSchema = {
     type: 'object',
     required: ['name', 'email', 'password', 'address'],
     properties: {
-      name: { type: 'string', minLength: 1, maxLength: 255 },
-      email: { type: 'string', format: 'email', maxLength: 255 },
+      name: varcharField({ nonEmpty: true }),
+      email: varcharField({ format: 'email' }),
       password: { type: 'string', minLength: 1 },
-      address: { type: 'string', minLength: 1, maxLength: 255 },
+      address: varcharField({ nonEmpty: true }),
     },
   },
   response: {
@@ -38,10 +39,10 @@ export const createCustomerSchema = {
     type: 'object',
     required: ['name', 'email', 'password', 'address'],
     properties: {
-      name: { type: 'string', minLength: 1, maxLength: 255 },
-      email: { type: 'string', format: 'email', maxLength: 255 },
+      name: varcharField({ nonEmpty: true }),
+      email: varcharField({ format: 'email' }),
       password: { type: 'string', minLength: 1 },
-      address: { type: 'string', minLength: 1, maxLength: 255 },
+      address: varcharField({ nonEmpty: true }),
     },
   },
   response: {
@@ -59,8 +60,8 @@ export const listCustomersSchema = {
     properties: {
       page: { type: 'integer', minimum: 1, default: 1 },
       limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
-      name: { type: 'string', maxLength: 255 },
-      email: { type: 'string', maxLength: 255 },
+      name: varcharField(),
+      email: varcharField(),
       is_active: { type: 'boolean' },
     },
   },
@@ -128,8 +129,8 @@ export const updateCustomerSchema = {
     type: 'object',
     required: ['name'],
     properties: {
-      name: { type: 'string', minLength: 1, maxLength: 255 },
-      address: { type: 'string', minLength: 1, maxLength: 255 },
+      name: varcharField({ nonEmpty: true }),
+      address: varcharField({ nonEmpty: true }),
     },
   },
   response: {

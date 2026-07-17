@@ -1,5 +1,4 @@
 import { SERVICE_KEYS } from '#constants/singleton';
-import { ValidationError } from '#configs/error';
 
 export class AdminController {
   constructor({ container }) {
@@ -25,10 +24,7 @@ export class AdminController {
   async updateStatus(request, reply) {
     const id = Number(request.params.id);
     const { is_active } = request.body;
-    if (!is_active && id === request.user?.id) {
-      throw new ValidationError('Cannot deactivate your own admin account');
-    }
-    const admin = await this.adminService.updateStatus(id, is_active);
+    const admin = await this.adminService.updateStatus(id, is_active, { callerId: request.user?.id });
     return reply.send({ success: true, message: 'Admin status updated', data: admin });
   }
 }

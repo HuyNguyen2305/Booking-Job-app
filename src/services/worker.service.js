@@ -1,12 +1,12 @@
 import { DateTime } from 'luxon';
 import { REPOSITORY_KEYS, SERVICE_KEYS } from '#constants/singleton';
-import { ValidationError, NotFoundError, ConflictError } from '#configs/error';
-import { BOOKING_ERROR_CODES, ACCOUNT_ERROR_CODES } from '#constants/error-codes.const';
+import { ValidationError, NotFoundError } from '#configs/error';
+import { BOOKING_ERROR_CODES } from '#constants/error-codes.const';
 import { BUSINESS_TZ, WEEKLY_HOURS_CAP } from '#constants/business-hours.const';
 import { parseTimestampWithOffset, toBusinessLocalDayBoundsUtc, toBusinessLocalWeekBoundsUtc } from '#utils/date.util';
 import { rankAvailableWorkers } from '#utils/worker-availability.util';
-import { isUniqueConstraintError } from '#utils/sequelize-error.util';
 import { buildAccountSearchWhere } from '#utils/account-search.util';
+import { createAccountOrThrowConflict } from '#utils/account-create.util';
 import { hashPassword } from '#src/common/auth/password.util';
 import { sequelize } from '#models/index';
 
@@ -46,14 +46,7 @@ export class WorkerService {
   }
 
   async _createWorker(data) {
-    try {
-      return await this.workerRepository.create(data);
-    } catch (err) {
-      if (isUniqueConstraintError(err)) {
-        throw new ConflictError('Email already registered', { code: ACCOUNT_ERROR_CODES.EMAIL_ALREADY_REGISTERED });
-      }
-      throw err;
-    }
+    return createAccountOrThrowConflict(this.workerRepository, data);
   }
 
   async list({ page, limit, name, email, is_active } = {}) {

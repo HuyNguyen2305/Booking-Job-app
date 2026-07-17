@@ -1,4 +1,5 @@
 import { buildSuccessResponse, buildPaginatedResponse } from '#common-schemas/response.schema';
+import { varcharField } from '#common-schemas/field.schema';
 
 const adminSchema = {
   type: 'object',
@@ -18,8 +19,8 @@ export const createAdminSchema = {
     type: 'object',
     required: ['name', 'email', 'password'],
     properties: {
-      name: { type: 'string', minLength: 1, maxLength: 255 },
-      email: { type: 'string', format: 'email', maxLength: 255 },
+      name: varcharField({ nonEmpty: true }),
+      email: varcharField({ format: 'email' }),
       password: { type: 'string', minLength: 1 },
     },
   },
@@ -38,8 +39,8 @@ export const listAdminsSchema = {
     properties: {
       page: { type: 'integer', minimum: 1, default: 1 },
       limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
-      name: { type: 'string', maxLength: 255 },
-      email: { type: 'string', maxLength: 255 },
+      name: varcharField(),
+      email: varcharField(),
       is_active: { type: 'boolean' },
     },
   },

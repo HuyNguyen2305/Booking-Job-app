@@ -142,4 +142,37 @@ describe('BookingService.createBooking (integration)', () => {
       bookingService.createBooking({ worker_id: worker.id, customer_id: 999999999, ...slot })
     ).rejects.toMatchObject({ code: BOOKING_ERROR_CODES.CUSTOMER_NOT_FOUND });
   });
+
+  /**
+   * Regression test for the bug fixed here: isAtLeastMinutesApart used to run before
+   * checkSlotRules, so an offset-less timestamp (still a full valid 60-minute gap) got
+   * masked behind a generic, code-less "must be at least 30 minutes apart" error instead
+   * of the real INVALID_TIMESTAMP_FORMAT that checkSlotRules's format validation produces.
+   * Uses the real (unmocked) BookingAvailabilityService + date.util, not a mock, since the
+   * bug was specifically about the interaction between the two real implementations.
+   */
+  it('rejects an offset-less timestamp with INVALID_TIMESTAMP_FORMAT, not a generic duration error', async () => {
+    const customer = await Customer.create({ name: 'Offset-less Timestamp Customer' });
+    customerIds.push(customer.id);
+    const worker = await Worker.create({ name: 'Offset-less Timestamp Worker', is_active: true });
+    workerIds.push(worker.id);
+
+    // nextTuesdayAt returns a full ISO string with an offset (e.g.
+    // "2026-07-21T09:00:00.000+07:00") — slicing to the first 19 chars ("YYYY-MM-DDTHH:mm:ss")
+    // strips the offset/milliseconds, giving the same wall-clock date/time with no offset.
+    const offsetLessStart = nextTuesdayAt(9, 0).slice(0, 19);
+    const offsetLessEnd = nextTuesdayAt(10, 0).slice(0, 19);
+    const bookingService = buildService();
+
+    await expect(
+      bookingService.createBooking({
+        worker_id: worker.id,
+        customer_id: customer.id,
+        // A full 60-minute gap — well over MIN_BOOKING_DURATION_MINUTES — but with no
+        // explicit UTC offset, so the bug (if reintroduced) would report the wrong error.
+        start_time: offsetLessStart,
+        end_time: offsetLessEnd,
+      })
+    ).rejects.toMatchObject({ code: BOOKING_ERROR_CODES.INVALID_TIMESTAMP_FORMAT });
+  });
 });

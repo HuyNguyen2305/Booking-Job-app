@@ -31,10 +31,6 @@ export class BookingService {
   }
 
   async createBooking({ worker_id, customer_id, start_time, end_time }) {
-    if (!isAtLeastMinutesApart(start_time, end_time, MIN_BOOKING_DURATION_MINUTES)) {
-      throw new ValidationError(`end_time must be at least ${MIN_BOOKING_DURATION_MINUTES} minutes after start_time`);
-    }
-
     const customer = await this.customerRepository.getOne({ where: { id: customer_id } });
     // A deleted (is_active: false) customer is treated as not found for booking purposes —
     // deletion should mean new bookings can't be created against them either.
@@ -42,9 +38,17 @@ export class BookingService {
       throw new ValidationError('Customer not found', { code: BOOKING_ERROR_CODES.CUSTOMER_NOT_FOUND });
     }
 
+    // checkSlotRules validates timestamp format (INVALID_TIMESTAMP_FORMAT) before this
+    // duration check runs — isAtLeastMinutesApart itself just returns false on an
+    // offset-less/malformed timestamp, and running it first would mask the real format
+    // problem behind a generic, code-less "not far enough apart" error instead.
     const slotCheck = await this.bookingAvailabilityService.checkSlotRules(start_time, end_time);
     if (!slotCheck.ok) {
       throw this._slotRuleError(slotCheck.code);
+    }
+
+    if (!isAtLeastMinutesApart(start_time, end_time, MIN_BOOKING_DURATION_MINUTES)) {
+      throw new ValidationError(`end_time must be at least ${MIN_BOOKING_DURATION_MINUTES} minutes after start_time`);
     }
 
     const candidateIds = await this._buildCandidateOrder(worker_id, start_time, end_time);
@@ -71,10 +75,6 @@ export class BookingService {
   }
 
   async rescheduleBooking(id, { start_time, end_time }) {
-    if (!isAtLeastMinutesApart(start_time, end_time, MIN_BOOKING_DURATION_MINUTES)) {
-      throw new ValidationError(`end_time must be at least ${MIN_BOOKING_DURATION_MINUTES} minutes after start_time`);
-    }
-
     const booking = await this.bookingRepository.getOne({ where: { id } });
     if (!booking) {
       throw new NotFoundError('Booking not found');
@@ -88,9 +88,16 @@ export class BookingService {
       });
     }
 
+    // checkSlotRules validates timestamp format (INVALID_TIMESTAMP_FORMAT) before this
+    // duration check runs — see the identical comment in createBooking for why the order
+    // matters.
     const slotCheck = await this.bookingAvailabilityService.checkSlotRules(start_time, end_time);
     if (!slotCheck.ok) {
       throw this._slotRuleError(slotCheck.code);
+    }
+
+    if (!isAtLeastMinutesApart(start_time, end_time, MIN_BOOKING_DURATION_MINUTES)) {
+      throw new ValidationError(`end_time must be at least ${MIN_BOOKING_DURATION_MINUTES} minutes after start_time`);
     }
 
     const originalWorkerId = booking.worker_id;
@@ -391,31 +398,26 @@ export class BookingService {
         (candidateId) => candidateId !== workerId
       );
 
-      // Each candidate is attempted inside a SAVEPOINT nested in the caller's outer
-      // transaction (not a fresh top-level one like _tryCandidates uses) — a lost race
-      // against the EXCLUDE constraint only rolls back that candidate's attempt, so the
-      // next candidate (or the next booking) can still proceed within the same outer
-      // transaction, while a genuinely-unavailable-for-everyone booking still throws and
-      // rolls back the whole deactivation, same as before.
-      let newWorkerId = null;
-      for (const candidateId of candidateIds) {
-        try {
-          await sequelize.transaction({ transaction }, async (savepoint) => {
-            const free = await this.bookingAvailabilityService.isWorkerFree(candidateId, startISO, endISO, {
-              transaction: savepoint,
-              excludeId: booking.id,
-            });
-            if (!free) throw SKIP_CANDIDATE;
-
-            return this.bookingRepository.update({ id: booking.id }, { worker_id: candidateId }, { transaction: savepoint });
+      // Passing the caller's outer transaction makes _tryCandidates attempt each
+      // candidate inside a SAVEPOINT nested in it (not a fresh top-level transaction) —
+      // a lost race against the EXCLUDE constraint only rolls back that candidate's
+      // attempt, so the next candidate (or the next booking) can still proceed within
+      // the same outer transaction, while a genuinely-unavailable-for-everyone booking
+      // still throws and rolls back the whole deactivation, same as before.
+      const newWorkerId = await this._tryCandidates(
+        candidateIds,
+        async (candidateId, savepoint) => {
+          const free = await this.bookingAvailabilityService.isWorkerFree(candidateId, startISO, endISO, {
+            transaction: savepoint,
+            excludeId: booking.id,
           });
-          newWorkerId = candidateId;
-          break;
-        } catch (err) {
-          if (err === SKIP_CANDIDATE || isExclusionConstraintError(err)) continue;
-          throw err;
-        }
-      }
+          if (!free) throw SKIP_CANDIDATE;
+
+          await this.bookingRepository.update({ id: booking.id }, { worker_id: candidateId }, { transaction: savepoint });
+          return candidateId;
+        },
+        { transaction }
+      );
 
       if (!newWorkerId) {
         throw new ConflictError(`Cannot deactivate worker: booking ${booking.id} has no available replacement worker`, {
@@ -430,16 +432,25 @@ export class BookingService {
   }
 
   /**
-   * Tries each candidate worker in order, each inside its OWN transaction (not one
-   * shared transaction for the whole loop) — this is what lets the DB EXCLUDE
-   * constraint act as the real per-candidate concurrency backstop. `attempt` throws
-   * SKIP_CANDIDATE (pre-check found a conflict) or an exclusion-constraint error
-   * (lost a race) to move to the next candidate; any other error propagates.
+   * Tries each candidate worker in order, each inside its own transaction — this is what
+   * lets the DB EXCLUDE constraint act as the real per-candidate concurrency backstop.
+   * `attempt` throws SKIP_CANDIDATE (pre-check found a conflict) or an exclusion-constraint
+   * error (lost a race) to move to the next candidate; any other error propagates.
+   *
+   * With no `transaction` option, each candidate gets a fresh top-level transaction
+   * (createBooking/rescheduleBooking/reassignBooking's usage — nothing outer to nest
+   * inside). Passed a `transaction`, each candidate instead gets a SAVEPOINT nested inside
+   * it (reassignBookingsFromWorker's usage — a lost race only rolls back that candidate's
+   * SAVEPOINT, not the caller's whole outer transaction).
    */
-  async _tryCandidates(candidateIds, attempt) {
+  async _tryCandidates(candidateIds, attempt, { transaction } = {}) {
     for (const candidateId of candidateIds) {
+      const runAttempt = (t) => attempt(candidateId, t);
       try {
-        return await sequelize.transaction((transaction) => attempt(candidateId, transaction));
+        // Two distinct call shapes, not one normalized to `options=undefined` — kept
+        // separate so callers/mocks that only expect the plain single-callback form
+        // (the common, no-outer-transaction case) don't have to handle a two-arg call.
+        return await (transaction ? sequelize.transaction({ transaction }, runAttempt) : sequelize.transaction(runAttempt));
       } catch (err) {
         if (err === SKIP_CANDIDATE || isExclusionConstraintError(err)) continue;
         throw err;

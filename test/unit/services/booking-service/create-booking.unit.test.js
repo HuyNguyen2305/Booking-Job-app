@@ -54,7 +54,11 @@ describe('BookingService.createBooking', () => {
     await expect(
       service.createBooking({ ...payload, end_time: '2026-07-14T09:29:00+07:00' })
     ).rejects.toBeInstanceOf(ValidationError);
-    expect(bookingAvailabilityServiceMock.checkSlotRules).not.toHaveBeenCalled();
+    // checkSlotRules (timestamp-format validation) runs BEFORE this duration check —
+    // regression guard: if checkSlotRules ran after instead, an offset-less/malformed
+    // timestamp would be masked behind this generic duration error instead of surfacing
+    // the real INVALID_TIMESTAMP_FORMAT code (see create-booking.integration.test.js).
+    expect(bookingAvailabilityServiceMock.checkSlotRules).toHaveBeenCalled();
   });
 
   it('throws ValidationError with CUSTOMER_NOT_FOUND when customer_id does not reference a real customer', async () => {

@@ -1,4 +1,5 @@
 import { buildSuccessResponse } from '#common-schemas/response.schema';
+import { varcharField } from '#common-schemas/field.schema';
 
 const holidaySchema = {
   type: 'object',
@@ -20,7 +21,7 @@ export const createHolidaySchema = {
     required: ['holiday_date', 'name'],
     properties: {
       holiday_date: { type: 'string', format: 'date' },
-      name: { type: 'string', minLength: 1, maxLength: 255 },
+      name: varcharField({ nonEmpty: true }),
       recurring_annual: { type: 'boolean', default: false },
     },
   },
@@ -38,7 +39,7 @@ export const createHolidayRangeSchema = {
     type: 'object',
     required: ['name', 'start_date', 'end_date'],
     properties: {
-      name: { type: 'string', minLength: 1, maxLength: 255 },
+      name: varcharField({ nonEmpty: true }),
       start_date: { type: 'string', format: 'date' },
       end_date: { type: 'string', format: 'date' },
       recurring_annual: { type: 'boolean', default: false },

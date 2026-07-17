@@ -1,9 +1,8 @@
 import { REPOSITORY_KEYS } from '#constants/singleton';
 import { hashPassword } from '#src/common/auth/password.util';
-import { NotFoundError, ConflictError } from '#configs/error';
-import { ACCOUNT_ERROR_CODES } from '#constants/error-codes.const';
-import { isUniqueConstraintError } from '#utils/sequelize-error.util';
+import { NotFoundError, ValidationError } from '#configs/error';
 import { buildAccountSearchWhere } from '#utils/account-search.util';
+import { createAccountOrThrowConflict } from '#utils/account-create.util';
 
 export class AdminService {
   constructor({ container }) {
@@ -12,14 +11,7 @@ export class AdminService {
 
   async create({ name, email, password }) {
     const password_hash = await hashPassword(password);
-    try {
-      return await this.adminRepository.create({ name, email, password_hash });
-    } catch (err) {
-      if (isUniqueConstraintError(err)) {
-        throw new ConflictError('Email already registered', { code: ACCOUNT_ERROR_CODES.EMAIL_ALREADY_REGISTERED });
-      }
-      throw err;
-    }
+    return createAccountOrThrowConflict(this.adminRepository, { name, email, password_hash });
   }
 
   async list({ page, limit, name, email, is_active } = {}) {
@@ -35,10 +27,17 @@ export class AdminService {
     return admin;
   }
 
-  async updateStatus(id, is_active) {
+  // An admin may not deactivate their own account — guards against losing all HTTP access
+  // with no CLI/DB path back in. Enforced here (not just in the controller) so any other
+  // caller of this method — a future script, CLI tool, or additional controller — can't
+  // bypass the invariant by skipping the controller's own check.
+  async updateStatus(id, is_active, { callerId } = {}) {
     const admin = await this.adminRepository.getOne({ where: { id } });
     if (!admin) {
       throw new NotFoundError('Admin not found');
+    }
+    if (!is_active && id === callerId) {
+      throw new ValidationError('Cannot deactivate your own admin account');
     }
     return this.adminRepository.update({ id }, { is_active });
   }

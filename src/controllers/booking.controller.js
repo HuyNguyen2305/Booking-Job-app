@@ -8,11 +8,24 @@ import { ValidationError } from '#configs/error';
 // Who may drive a booking to each target status via PATCH .../status: a Worker may only
 // confirm their own assigned job; only a Customer (or Admin, who bypasses this map
 // entirely) may mark it COMPLETED or CANCELLED — a Worker cannot unilaterally complete
-// or cancel a booking that belongs to someone else's account.
+// or cancel a booking that belongs to someone else's account. PENDING is deliberately
+// absent — BOOKING_STATUS_TRANSITIONS never allows any status to transition TO PENDING,
+// so it's always an invalid target; the ownership gate below skips it and lets
+// BookingService.updateStatus's transition-table check reject it with an accurate 409,
+// rather than this map guessing an owner role for a target no role is ever allowed to reach.
 const STATUS_OWNER_ROLE = {
   [BOOKING_STATUS.CONFIRMED]: ROLES.WORKER,
   [BOOKING_STATUS.COMPLETED]: ROLES.CUSTOMER,
   [BOOKING_STATUS.CANCELLED]: ROLES.CUSTOMER,
+};
+
+// How a Worker/Customer's own-scoped list() request is resolved: which query param names
+// their own id (for the optional mismatch check) and which service method actually lists
+// their bookings. ADMIN isn't here — it has no implicit "own id", so it's handled
+// separately in list() below.
+const LIST_SCOPE_BY_ROLE = {
+  [ROLES.WORKER]: { param: 'worker_id', list: (service, id, opts) => service.listByWorker(id, opts) },
+  [ROLES.CUSTOMER]: { param: 'customer_id', list: (service, id, opts) => service.listByCustomer(id, opts) },
 };
 
 export class BookingController {
@@ -33,10 +46,22 @@ export class BookingController {
     // itself doesn't return — only fetched when enforcement is actually on, since it's an
     // extra DB round-trip that's pure overhead during the dev/test bypass.
     if (isAuthEnforced()) {
-      const existing = await this.bookingService.getById(id);
       const requiredRole = STATUS_OWNER_ROLE[targetStatus];
-      const ownerId = requiredRole === ROLES.WORKER ? existing.worker_id : existing.customer_id;
-      assertOwnership(request.user, { role: requiredRole, ownerId });
+      const existing = await this.bookingService.getById(id);
+      if (requiredRole) {
+        const ownerId = requiredRole === ROLES.WORKER ? existing.worker_id : existing.customer_id;
+        assertOwnership(request.user, { role: requiredRole, ownerId });
+      } else {
+        // No role owns this target status (only PENDING — no transition ever reaches it,
+        // so BOOKING_STATUS_TRANSITIONS will always reject it with 409). Still require
+        // SOME ownership relationship to the booking (worker or customer) rather than
+        // skipping the check outright — otherwise any authenticated Worker/Customer could
+        // probe arbitrary booking ids for existence/status via this endpoint's 404/409.
+        assertOwnershipAny(request.user, [
+          { role: ROLES.WORKER, ownerId: existing.worker_id },
+          { role: ROLES.CUSTOMER, ownerId: existing.customer_id },
+        ]);
+      }
     }
     const booking = await this.bookingService.updateStatus(id, targetStatus);
     return reply.send({ success: true, message: 'Booking status updated', data: booking });
@@ -60,6 +85,7 @@ export class BookingController {
   async list(request, reply) {
     const { worker_id, customer_id, from, to, page, limit } = request.query;
     const role = request.user?.role;
+    const scope = LIST_SCOPE_BY_ROLE[role];
 
     // Which id is actually queried is driven by the CALLER's role, never by "whichever
     // query param happens to be present" — a Customer supplying a stray worker_id must
@@ -68,19 +94,12 @@ export class BookingController {
     // Both params are optional for these two roles: if their own-role param is present it
     // must match their token (guards against a confused/malicious explicit mismatch), but
     // its absence is not itself suspicious — it's the normal "just show me my bookings" call.
-    if (role === ROLES.WORKER) {
-      if (worker_id !== undefined) {
-        assertOwnership(request.user, { role: ROLES.WORKER, ownerId: worker_id });
+    if (scope) {
+      const ownParam = request.query[scope.param];
+      if (ownParam !== undefined) {
+        assertOwnership(request.user, { role, ownerId: ownParam });
       }
-      const bookings = await this.bookingService.listByWorker(request.user.id, { from, to, page, limit });
-      return reply.send({ success: true, message: 'Bookings retrieved', data: bookings });
-    }
-
-    if (role === ROLES.CUSTOMER) {
-      if (customer_id !== undefined) {
-        assertOwnership(request.user, { role: ROLES.CUSTOMER, ownerId: customer_id });
-      }
-      const bookings = await this.bookingService.listByCustomer(request.user.id, { from, to, page, limit });
+      const bookings = await scope.list(this.bookingService, request.user.id, { from, to, page, limit });
       return reply.send({ success: true, message: 'Bookings retrieved', data: bookings });
     }
 

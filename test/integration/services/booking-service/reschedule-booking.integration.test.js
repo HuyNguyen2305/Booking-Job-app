@@ -147,4 +147,33 @@ describe('BookingService.rescheduleBooking (integration)', () => {
     const persisted = await Booking.findByPk(booking.id);
     expect(new Date(persisted.start_time).toISOString()).toBe('2020-01-06T02:00:00.000Z');
   });
+
+  /**
+   * Regression test for the bug fixed here: isAtLeastMinutesApart used to run before
+   * checkSlotRules, so an offset-less new window (still a full valid 30-minute gap) got
+   * masked behind a generic, code-less duration error instead of the real
+   * INVALID_TIMESTAMP_FORMAT that checkSlotRules's format validation produces. Uses the
+   * real (unmocked) BookingAvailabilityService + date.util, since the bug was specifically
+   * about the interaction between the two real implementations.
+   */
+  it('rejects an offset-less new window with INVALID_TIMESTAMP_FORMAT, not a generic duration error', async () => {
+    const worker = await Worker.create({ name: 'Reschedule Offset-less Worker', is_active: true });
+    workerIds.push(worker.id);
+
+    const originalSlot = { start_time: nextTuesdayAt(9, 0), end_time: nextTuesdayAt(9, 30) };
+    const booking = await Booking.create({ worker_id: worker.id, customer_id: 1, ...originalSlot, status: 'PENDING' });
+    bookingIds.push(booking.id);
+
+    // nextTuesdayAt returns a full ISO string with an offset — slicing to the first 19
+    // chars ("YYYY-MM-DDTHH:mm:ss") strips it, giving the same wall-clock time with no
+    // offset. A full 30-minute gap, well over MIN_BOOKING_DURATION_MINUTES.
+    const bookingService = buildService();
+
+    await expect(
+      bookingService.rescheduleBooking(booking.id, {
+        start_time: nextTuesdayAt(15, 0).slice(0, 19),
+        end_time: nextTuesdayAt(15, 30).slice(0, 19),
+      })
+    ).rejects.toMatchObject({ code: BOOKING_ERROR_CODES.INVALID_TIMESTAMP_FORMAT });
+  });
 });
