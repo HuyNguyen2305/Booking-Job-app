@@ -5,8 +5,9 @@ const adminRepositoryMock = {
 };
 
 const { AdminService } = await import('#services/admin.service');
+const { NotFoundError } = await import('#configs/error');
 
-describe('AdminService.getByEmail', () => {
+describe('AdminService.getById', () => {
   let service;
 
   beforeEach(() => {
@@ -15,21 +16,19 @@ describe('AdminService.getByEmail', () => {
     service.adminRepository = adminRepositoryMock;
   });
 
-  it('delegates to adminRepository.getOne with the given email', async () => {
+  it('returns the admin when found', async () => {
     const admin = { id: 1, name: 'Root', email: 'root@example.com' };
     adminRepositoryMock.getOne.mockResolvedValue(admin);
 
-    const result = await service.getByEmail('root@example.com');
+    const result = await service.getById(1);
 
-    expect(adminRepositoryMock.getOne).toHaveBeenCalledWith({ where: { email: 'root@example.com' } });
+    expect(adminRepositoryMock.getOne).toHaveBeenCalledWith({ where: { id: 1 } });
     expect(result).toBe(admin);
   });
 
-  it('returns null when no admin matches the email', async () => {
+  it('throws NotFoundError when the admin does not exist', async () => {
     adminRepositoryMock.getOne.mockResolvedValue(null);
 
-    const result = await service.getByEmail('nope@example.com');
-
-    expect(result).toBeNull();
+    await expect(service.getById(999)).rejects.toBeInstanceOf(NotFoundError);
   });
 });

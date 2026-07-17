@@ -1,12 +1,13 @@
 import { DateTime } from 'luxon';
 
 export function isAtLeastMinutesApart(startTime, endTime, minutes) {
-  const start = new Date(startTime).getTime();
-  const end = new Date(endTime).getTime();
-  return end - start >= minutes * 60 * 1000;
+  const start = parseTimestampWithOffset(startTime);
+  const end = parseTimestampWithOffset(endTime);
+  if (!start || !end) return false;
+  return end.diff(start, 'milliseconds').milliseconds >= minutes * 60 * 1000;
 }
 
-const OFFSET_SUFFIX_RE = /(Z|[+-]\d{2}:\d{2}|[+-]\d{4})$/;
+const OFFSET_SUFFIX_RE = /(Z|[+-]\d{2}:\d{2}|[+-]\d{4})$/i;
 
 /**
  * Returns a luxon DateTime if `value` is a syntactically valid ISO 8601 string

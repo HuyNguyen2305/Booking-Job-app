@@ -3,6 +3,7 @@ import { jest, describe, it, expect, beforeAll, afterAll, beforeEach } from '@je
 const workerServiceMock = {
   listAvailable: jest.fn(),
   register: jest.fn(),
+  selfRegister: jest.fn(),
   list: jest.fn(),
   getById: jest.fn(),
   updateStatus: jest.fn(),
@@ -86,6 +87,19 @@ describe('Worker router auth enforcement (NODE_ENV=production)', () => {
 
     expect(response.statusCode).toBe(403);
     expect(workerServiceMock.register).not.toHaveBeenCalled();
+  });
+
+  it('POST /api/workers/register returns 201 without a bearer token (public self-signup)', async () => {
+    workerServiceMock.selfRegister.mockResolvedValue({ id: 3, name: 'New Guy', email: 'new@example.com', is_active: false });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/workers/register',
+      payload: { name: 'New Guy', email: 'new@example.com', password: 'secret' },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(workerServiceMock.selfRegister).toHaveBeenCalled();
   });
 
   it('GET /api/workers/available returns 200 for CUSTOMER', async () => {

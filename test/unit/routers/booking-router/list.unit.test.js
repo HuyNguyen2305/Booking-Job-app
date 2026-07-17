@@ -83,13 +83,29 @@ describe('GET /api/bookings (router + controller + error handler)', () => {
     expect(bookingServiceMock.listByWorker).not.toHaveBeenCalled();
   });
 
-  it('returns 400 schema validation error when neither worker_id nor customer_id is given, without calling the service', async () => {
+  it('returns 400 when neither worker_id nor customer_id is given for an ADMIN caller, without calling the service', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/bookings' });
 
     expect(response.statusCode).toBe(400);
     const body = response.json();
     expect(body.success).toBe(false);
-    expect(body.message).toBe('Validation error');
+    expect(body.message).toBe('worker_id or customer_id is required');
+    expect(bookingServiceMock.listByWorker).not.toHaveBeenCalled();
+    expect(bookingServiceMock.listByCustomer).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 schema validation error when both worker_id and customer_id are given, without calling the service', async () => {
+    const response = await app.inject({ method: 'GET', url: '/api/bookings?worker_id=5&customer_id=601' });
+
+    expect(response.statusCode).toBe(400);
+    expect(bookingServiceMock.listByWorker).not.toHaveBeenCalled();
+    expect(bookingServiceMock.listByCustomer).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 schema validation error when limit exceeds the maximum, without calling the service', async () => {
+    const response = await app.inject({ method: 'GET', url: '/api/bookings?worker_id=5&limit=101' });
+
+    expect(response.statusCode).toBe(400);
     expect(bookingServiceMock.listByWorker).not.toHaveBeenCalled();
     expect(bookingServiceMock.listByCustomer).not.toHaveBeenCalled();
   });

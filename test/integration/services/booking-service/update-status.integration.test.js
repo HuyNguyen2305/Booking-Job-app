@@ -6,6 +6,7 @@ const { WorkerRepository } = await import('#repositories/worker.repository');
 const { BookingService } = await import('#services/booking.service');
 const { Worker } = await import('#models/worker.model');
 const { Booking } = await import('#models/booking.model');
+const { BOOKING_ERROR_CODES } = await import('#constants/error-codes.const');
 
 /**
  * Real committed rows (not seedWithTransaction's rollback pattern) — same reasoning as
@@ -93,5 +94,43 @@ describe('BookingService.updateStatus (integration)', () => {
 
     const persistedWorker = await Worker.findByPk(worker.id);
     expect(persistedWorker.total_hours).toBe(0);
+  });
+
+  it('two concurrent COMPLETED transitions race safely: exactly one wins, total_hours is incremented exactly once', async () => {
+    const worker = await Worker.create({ name: 'Race Test Worker', is_active: true, total_hours: 0 });
+    workerIds.push(worker.id);
+
+    // 09:00-11:00 local = 2 hours, an exact binary-float value.
+    const booking = await Booking.create({
+      worker_id: worker.id,
+      customer_id: 1,
+      start_time: nextTuesdayAt(9, 0),
+      end_time: nextTuesdayAt(11, 0),
+      status: 'CONFIRMED',
+    });
+    bookingIds.push(booking.id);
+
+    // Two independent BookingService instances (their own repositories, no shared
+    // in-memory state) firing the identical transition at the same real booking row —
+    // this is what actually exercises the DB-level compare-and-swap, not a mock.
+    const [resultA, resultB] = await Promise.allSettled([
+      buildService().updateStatus(booking.id, 'COMPLETED'),
+      buildService().updateStatus(booking.id, 'COMPLETED'),
+    ]);
+
+    const outcomes = [resultA, resultB];
+    const fulfilled = outcomes.filter((r) => r.status === 'fulfilled');
+    const rejected = outcomes.filter((r) => r.status === 'rejected');
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].reason).toMatchObject({ code: BOOKING_ERROR_CODES.CONCURRENT_STATUS_CHANGE });
+
+    const persistedBooking = await Booking.findByPk(booking.id);
+    expect(persistedBooking.status).toBe('COMPLETED');
+
+    // The money assertion: hours added exactly once, not twice.
+    const persistedWorker = await Worker.findByPk(worker.id);
+    expect(persistedWorker.total_hours).toBe(2);
   });
 });

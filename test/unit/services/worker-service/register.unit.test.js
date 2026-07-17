@@ -10,6 +10,8 @@ const passwordUtilMock = { hashPassword: jest.fn() };
 jest.unstable_mockModule('#src/common/auth/password.util', () => passwordUtilMock);
 
 const { WorkerService } = await import('#services/worker.service');
+const { ConflictError } = await import('#configs/error');
+const { ACCOUNT_ERROR_CODES } = await import('#constants/error-codes.const');
 
 describe('WorkerService.register', () => {
   let service;
@@ -34,5 +36,17 @@ describe('WorkerService.register', () => {
       password_hash: 'hashed-secret',
     });
     expect(result).toBe(created);
+  });
+
+  it('throws ConflictError with EMAIL_ALREADY_REGISTERED when the email is already taken', async () => {
+    passwordUtilMock.hashPassword.mockResolvedValue('hashed-secret');
+    workerRepositoryMock.create.mockRejectedValue({ parent: { code: '23505' } });
+
+    await expect(service.register({ name: 'Alice', email: 'alice@example.com', password: 'secret' })).rejects.toMatchObject({
+      code: ACCOUNT_ERROR_CODES.EMAIL_ALREADY_REGISTERED,
+    });
+    await expect(
+      service.register({ name: 'Alice', email: 'alice@example.com', password: 'secret' })
+    ).rejects.toBeInstanceOf(ConflictError);
   });
 });

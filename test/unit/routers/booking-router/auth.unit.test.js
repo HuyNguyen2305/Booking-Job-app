@@ -114,7 +114,7 @@ describe('Booking router auth enforcement (NODE_ENV=production)', () => {
     expect(response.statusCode).toBe(403);
   });
 
-  it('PATCH /api/bookings/:id/status returns 200 when the WORKER token matches the booking worker_id', async () => {
+  it('PATCH /api/bookings/:id/status returns 200 when the WORKER token matches the booking worker_id and target is CONFIRMED', async () => {
     bookingServiceMock.getById.mockResolvedValue({ id: 10, worker_id: 2, customer_id: 5 });
     bookingServiceMock.updateStatus.mockResolvedValue({ id: 10, status: 'CONFIRMED' });
 
@@ -126,6 +126,170 @@ describe('Booking router auth enforcement (NODE_ENV=production)', () => {
     });
 
     expect(response.statusCode).toBe(200);
+  });
+
+  it('PATCH /api/bookings/:id/status returns 403 when a WORKER (even the assigned one) targets COMPLETED', async () => {
+    bookingServiceMock.getById.mockResolvedValue({ id: 10, worker_id: 2, customer_id: 5 });
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/bookings/10/status',
+      headers: { authorization: `Bearer ${workerToken}` },
+      payload: { status: 'COMPLETED' },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(bookingServiceMock.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('PATCH /api/bookings/:id/status returns 403 when a WORKER (even the assigned one) targets CANCELLED', async () => {
+    bookingServiceMock.getById.mockResolvedValue({ id: 10, worker_id: 2, customer_id: 5 });
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/bookings/10/status',
+      headers: { authorization: `Bearer ${workerToken}` },
+      payload: { status: 'CANCELLED' },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(bookingServiceMock.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('PATCH /api/bookings/:id/status returns 200 when the owning CUSTOMER targets COMPLETED', async () => {
+    bookingServiceMock.getById.mockResolvedValue({ id: 10, worker_id: 2, customer_id: 5 });
+    bookingServiceMock.updateStatus.mockResolvedValue({ id: 10, status: 'COMPLETED' });
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/bookings/10/status',
+      headers: { authorization: `Bearer ${customerToken}` },
+      payload: { status: 'COMPLETED' },
+    });
+
+    expect(response.statusCode).toBe(200);
+  });
+
+  it('PATCH /api/bookings/:id/status returns 200 when the owning CUSTOMER targets CANCELLED', async () => {
+    bookingServiceMock.getById.mockResolvedValue({ id: 10, worker_id: 2, customer_id: 5 });
+    bookingServiceMock.updateStatus.mockResolvedValue({ id: 10, status: 'CANCELLED' });
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/bookings/10/status',
+      headers: { authorization: `Bearer ${customerToken}` },
+      payload: { status: 'CANCELLED' },
+    });
+
+    expect(response.statusCode).toBe(200);
+  });
+
+  it('PATCH /api/bookings/:id/status returns 403 when the CUSTOMER targets CONFIRMED (wrong role for that target)', async () => {
+    bookingServiceMock.getById.mockResolvedValue({ id: 10, worker_id: 2, customer_id: 5 });
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/bookings/10/status',
+      headers: { authorization: `Bearer ${customerToken}` },
+      payload: { status: 'CONFIRMED' },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(bookingServiceMock.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('PATCH /api/bookings/:id/status returns 403 when a non-owning CUSTOMER targets COMPLETED', async () => {
+    bookingServiceMock.getById.mockResolvedValue({ id: 10, worker_id: 2, customer_id: 999 });
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/bookings/10/status',
+      headers: { authorization: `Bearer ${customerToken}` },
+      payload: { status: 'COMPLETED' },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(bookingServiceMock.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('GET /api/bookings ignores a spoofed worker_id for a CUSTOMER caller and always scopes to their own id (IDOR fix)', async () => {
+    bookingServiceMock.listByCustomer.mockResolvedValue({ rows: [], count: 0, page: 1, limit: 20, totalPages: 0 });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/bookings?worker_id=999', // no customer_id supplied at all
+      headers: { authorization: `Bearer ${customerToken}` },
+    });
+
+    // worker_id is irrelevant for a CUSTOMER caller and is never even inspected; a missing
+    // customer_id is not itself suspicious (it's optional for this role) so this resolves
+    // to the caller's own bookings rather than a rejection — the spoofed worker_id simply
+    // never reaches listByWorker, which is the actual IDOR guarantee being tested here.
+    expect(response.statusCode).toBe(200);
+    expect(bookingServiceMock.listByCustomer).toHaveBeenCalledWith(5, expect.anything());
+    expect(bookingServiceMock.listByWorker).not.toHaveBeenCalled();
+  });
+
+  it('GET /api/bookings never calls listByWorker for a CUSTOMER caller, even with a valid own customer_id present', async () => {
+    bookingServiceMock.listByCustomer.mockResolvedValue({ rows: [{ id: 1 }], count: 1, page: 1, limit: 20, totalPages: 1 });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/bookings?customer_id=5',
+      headers: { authorization: `Bearer ${customerToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(bookingServiceMock.listByCustomer).toHaveBeenCalledWith(5, expect.anything());
+    expect(bookingServiceMock.listByWorker).not.toHaveBeenCalled();
+  });
+
+  it('GET /api/bookings returns 403 for a CUSTOMER caller who supplies a mismatched customer_id', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/bookings?customer_id=999', // present, but not this caller's own id (5)
+      headers: { authorization: `Bearer ${customerToken}` },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(bookingServiceMock.listByCustomer).not.toHaveBeenCalled();
+  });
+
+  it('GET /api/bookings with no query params returns the CUSTOMER caller\'s own bookings', async () => {
+    bookingServiceMock.listByCustomer.mockResolvedValue({ rows: [{ id: 1 }], count: 1, page: 1, limit: 20, totalPages: 1 });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/bookings',
+      headers: { authorization: `Bearer ${customerToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(bookingServiceMock.listByCustomer).toHaveBeenCalledWith(5, expect.anything());
+  });
+
+  it('GET /api/bookings with no query params returns the WORKER caller\'s own bookings', async () => {
+    bookingServiceMock.listByWorker.mockResolvedValue({ rows: [{ id: 1 }], count: 1, page: 1, limit: 20, totalPages: 1 });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/bookings',
+      headers: { authorization: `Bearer ${workerToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(bookingServiceMock.listByWorker).toHaveBeenCalledWith(2, expect.anything());
+  });
+
+  it('GET /api/bookings returns 403 for a WORKER caller who supplies a mismatched worker_id', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/bookings?worker_id=999', // present, but not this caller's own id (2)
+      headers: { authorization: `Bearer ${workerToken}` },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(bookingServiceMock.listByWorker).not.toHaveBeenCalled();
   });
 
   it('PATCH /api/bookings/:id/reassign returns 403 for CUSTOMER (admin-only)', async () => {

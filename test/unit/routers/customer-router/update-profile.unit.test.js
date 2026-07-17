@@ -1,7 +1,7 @@
 import { jest, describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
 
 const customerServiceMock = {
-  updateName: jest.fn(),
+  updateProfile: jest.fn(),
 };
 
 class MockCustomerService {
@@ -33,17 +33,32 @@ describe('PATCH /api/customers/:id (router + controller + error handler)', () =>
 
   it('returns 200 with the updated customer', async () => {
     const customer = { id: 1, name: 'Bob' };
-    customerServiceMock.updateName.mockResolvedValue(customer);
+    customerServiceMock.updateProfile.mockResolvedValue(customer);
 
     const response = await app.inject({ method: 'PATCH', url: '/api/customers/1', payload: { name: 'Bob' } });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ success: true, message: 'Customer updated', data: customer });
-    expect(customerServiceMock.updateName).toHaveBeenCalledWith(1, 'Bob');
+    expect(customerServiceMock.updateProfile).toHaveBeenCalledWith(1, { name: 'Bob' });
+  });
+
+  it('returns 200 with the updated customer when name and address are both given', async () => {
+    const customer = { id: 1, name: 'Bob', address: '2 New St' };
+    customerServiceMock.updateProfile.mockResolvedValue(customer);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/customers/1',
+      payload: { name: 'Bob', address: '2 New St' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ success: true, message: 'Customer updated', data: customer });
+    expect(customerServiceMock.updateProfile).toHaveBeenCalledWith(1, { name: 'Bob', address: '2 New St' });
   });
 
   it('returns 404 in the custom error shape when the customer does not exist', async () => {
-    customerServiceMock.updateName.mockRejectedValue(new NotFoundError('Customer not found'));
+    customerServiceMock.updateProfile.mockRejectedValue(new NotFoundError('Customer not found'));
 
     const response = await app.inject({ method: 'PATCH', url: '/api/customers/999', payload: { name: 'Bob' } });
 
@@ -55,13 +70,25 @@ describe('PATCH /api/customers/:id (router + controller + error handler)', () =>
     const response = await app.inject({ method: 'PATCH', url: '/api/customers/1', payload: {} });
 
     expect(response.statusCode).toBe(400);
-    expect(customerServiceMock.updateName).not.toHaveBeenCalled();
+    expect(customerServiceMock.updateProfile).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 schema validation error when name/address exceeds 255 chars, without calling the service', async () => {
+    const tooLong = 'a'.repeat(256);
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/customers/1',
+      payload: { name: tooLong, address: tooLong },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(customerServiceMock.updateProfile).not.toHaveBeenCalled();
   });
 
   it('returns 400 schema validation error for a non-integer id param, without calling the service', async () => {
     const response = await app.inject({ method: 'PATCH', url: '/api/customers/not-a-number', payload: { name: 'Bob' } });
 
     expect(response.statusCode).toBe(400);
-    expect(customerServiceMock.updateName).not.toHaveBeenCalled();
+    expect(customerServiceMock.updateProfile).not.toHaveBeenCalled();
   });
 });

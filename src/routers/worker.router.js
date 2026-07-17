@@ -4,6 +4,7 @@ import { requireRole } from '#src/common/auth/require-role';
 import {
   listAvailableWorkersSchema,
   registerWorkerSchema,
+  selfRegisterWorkerSchema,
   listWorkersSchema,
   updateWorkerStatusSchema,
   getWorkerSchema,
@@ -32,6 +33,14 @@ class WorkerRouter {
       config: { responseFormat: 'standard' },
       preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN)],
       handler: this.workerController.register.bind(this.workerController),
+    });
+
+    this.fastify.route({
+      method: 'POST',
+      url: '/api/workers/register',
+      schema: selfRegisterWorkerSchema,
+      config: { responseFormat: 'standard' },
+      handler: this.workerController.selfRegister.bind(this.workerController),
     });
 
     this.fastify.route({

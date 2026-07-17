@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from '@jest/globals';
 import { seedWithTransaction } from '#test/helpers/seed-fixtures.js';
 
 const { CustomerRepository } = await import('#repositories/customer.repository');
+const { buildAccountSearchWhere } = await import('#utils/account-search.util');
 
 describe('CustomerRepository.pagination (integration)', () => {
   let rollback;
@@ -81,6 +82,26 @@ describe('CustomerRepository.pagination (integration)', () => {
       expect(result.rows).toEqual([]);
       expect(result.count).toBe(1);
       expect(result.totalPages).toBe(1);
+    });
+  });
+
+  it('with buildAccountSearchWhere, matches a name search case-insensitively against real Postgres ILIKE', async () => {
+    const ctx = await seedWithTransaction([
+      {
+        table: 'customers',
+        rows: [
+          { id: 8401, name: 'Alice Nguyen', email: 'alice8401@example.com' },
+          { id: 8402, name: 'Bob Tran', email: 'bob8402@example.com' },
+        ],
+      },
+    ]);
+    rollback = ctx.rollback;
+
+    await ctx.run(async (transaction) => {
+      const where = buildAccountSearchWhere({ name: 'ALICE' });
+      const result = await repository.pagination({ where: { ...where, id: [8401, 8402] }, transaction });
+
+      expect(result.rows.map((c) => c.id)).toEqual([8401]);
     });
   });
 });

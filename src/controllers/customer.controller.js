@@ -13,8 +13,8 @@ export class CustomerController {
   }
 
   async list(request, reply) {
-    const { page, limit } = request.query;
-    const customers = await this.customerService.list({ page, limit });
+    const { page, limit, name, email, is_active } = request.query;
+    const customers = await this.customerService.list({ page, limit, name, email, is_active });
     return reply.send({ success: true, message: 'Customers retrieved', data: customers });
   }
 
@@ -25,10 +25,10 @@ export class CustomerController {
     return reply.send({ success: true, message: 'Customer retrieved', data: customer });
   }
 
-  async updateName(request, reply) {
+  async updateProfile(request, reply) {
     const id = Number(request.params.id);
     assertOwnership(request.user, { role: ROLES.CUSTOMER, ownerId: id });
-    const customer = await this.customerService.updateName(id, request.body.name);
+    const customer = await this.customerService.updateProfile(id, request.body);
     return reply.send({ success: true, message: 'Customer updated', data: customer });
   }
 

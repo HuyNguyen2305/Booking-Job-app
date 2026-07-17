@@ -1,4 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import { ExclusionConstraintError } from 'sequelize';
 
 process.env.BUSINESS_TZ = 'Asia/Ho_Chi_Minh';
 
@@ -13,6 +14,11 @@ const workerRepositoryMock = {
 const bookingAvailabilityServiceMock = {
   isWorkerFree: jest.fn(),
 };
+const sequelizeMock = {
+  transaction: jest.fn((opts, callback) => callback('mock-savepoint')),
+};
+
+jest.unstable_mockModule('#models/index', () => ({ sequelize: sequelizeMock }));
 
 const { BookingService } = await import('#services/booking.service');
 const { ConflictError } = await import('#configs/error');
@@ -23,6 +29,7 @@ describe('BookingService.reassignBookingsFromWorker', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    sequelizeMock.transaction.mockImplementation((opts, callback) => callback('mock-savepoint'));
     service = Object.create(BookingService.prototype);
     service.bookingRepository = bookingRepositoryMock;
     service.workerRepository = workerRepositoryMock;
@@ -54,9 +61,14 @@ describe('BookingService.reassignBookingsFromWorker', () => {
       2,
       '2026-07-14T02:00:00.000Z',
       '2026-07-14T02:30:00.000Z',
-      { transaction: 'tx', excludeId: 10 }
+      { transaction: 'mock-savepoint', excludeId: 10 }
     );
-    expect(bookingRepositoryMock.update).toHaveBeenCalledWith({ id: 10 }, { worker_id: 2 }, { transaction: 'tx' });
+    expect(bookingRepositoryMock.update).toHaveBeenCalledWith(
+      { id: 10 },
+      { worker_id: 2 },
+      { transaction: 'mock-savepoint' }
+    );
+    expect(sequelizeMock.transaction).toHaveBeenCalledWith({ transaction: 'tx' }, expect.any(Function));
     expect(result).toEqual([{ booking_id: 10, new_worker_id: 2 }]);
   });
 
@@ -126,5 +138,52 @@ describe('BookingService.reassignBookingsFromWorker', () => {
       { booking_id: 11, new_worker_id: 3 },
     ]);
     expect(bookingRepositoryMock.update).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls through to the next candidate when the first one loses a real EXCLUDE-constraint race', async () => {
+    bookingRepositoryMock.listReassignableForWorker.mockResolvedValue([
+      { id: 10, worker_id: 1, start_time: new Date('2026-07-14T09:00:00+07:00'), end_time: new Date('2026-07-14T09:30:00+07:00') },
+    ]);
+    workerRepositoryMock.listActive.mockResolvedValue([{ id: 1 }, { id: 2 }, { id: 3 }]);
+    workerRepositoryMock.getAvailability.mockResolvedValue([
+      { worker_id: 2, has_overlap: false, booked_hours: 0 },
+      { worker_id: 3, has_overlap: false, booked_hours: 1 },
+    ]);
+    bookingAvailabilityServiceMock.isWorkerFree.mockResolvedValue(true);
+
+    const exclusionError = new ExclusionConstraintError({ message: 'conflicting key value' });
+    bookingRepositoryMock.update.mockRejectedValueOnce(exclusionError).mockResolvedValueOnce({ id: 10, worker_id: 3 });
+
+    const result = await service.reassignBookingsFromWorker(1, { transaction: 'tx' });
+
+    // Worker 2 (ranked first) loses the race; worker 3 is tried next and succeeds.
+    expect(bookingRepositoryMock.update).toHaveBeenCalledTimes(2);
+    expect(bookingRepositoryMock.update).toHaveBeenNthCalledWith(
+      1,
+      { id: 10 },
+      { worker_id: 2 },
+      { transaction: 'mock-savepoint' }
+    );
+    expect(bookingRepositoryMock.update).toHaveBeenNthCalledWith(
+      2,
+      { id: 10 },
+      { worker_id: 3 },
+      { transaction: 'mock-savepoint' }
+    );
+    expect(result).toEqual([{ booking_id: 10, new_worker_id: 3 }]);
+  });
+
+  it('throws WORKER_UNAVAILABLE when every candidate loses the race', async () => {
+    bookingRepositoryMock.listReassignableForWorker.mockResolvedValue([
+      { id: 10, worker_id: 1, start_time: new Date('2026-07-14T09:00:00+07:00'), end_time: new Date('2026-07-14T09:30:00+07:00') },
+    ]);
+    workerRepositoryMock.listActive.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+    workerRepositoryMock.getAvailability.mockResolvedValue([{ worker_id: 2, has_overlap: false, booked_hours: 0 }]);
+    bookingAvailabilityServiceMock.isWorkerFree.mockResolvedValue(true);
+    bookingRepositoryMock.update.mockRejectedValue(new ExclusionConstraintError({ message: 'conflicting key value' }));
+
+    await expect(service.reassignBookingsFromWorker(1, { transaction: 'tx' })).rejects.toMatchObject({
+      code: BOOKING_ERROR_CODES.WORKER_UNAVAILABLE,
+    });
   });
 });

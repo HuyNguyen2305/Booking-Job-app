@@ -70,8 +70,27 @@ export const registerWorkerSchema = {
     type: 'object',
     required: ['name', 'email', 'password'],
     properties: {
-      name: { type: 'string', minLength: 1 },
-      email: { type: 'string', format: 'email' },
+      name: { type: 'string', minLength: 1, maxLength: 255 },
+      email: { type: 'string', format: 'email', maxLength: 255 },
+      password: { type: 'string', minLength: 1 },
+    },
+  },
+  response: {
+    201: buildSuccessResponse(workerSchema),
+  },
+};
+
+export const selfRegisterWorkerSchema = {
+  tags: ['Workers'],
+  summary: 'Register a new worker (self-signup)',
+  description:
+    'Public self-signup. The worker is created inactive (is_active: false) until an admin approves them via PATCH /api/workers/:id.',
+  body: {
+    type: 'object',
+    required: ['name', 'email', 'password'],
+    properties: {
+      name: { type: 'string', minLength: 1, maxLength: 255 },
+      email: { type: 'string', format: 'email', maxLength: 255 },
       password: { type: 'string', minLength: 1 },
     },
   },
@@ -82,12 +101,17 @@ export const registerWorkerSchema = {
 
 export const listWorkersSchema = {
   tags: ['Workers'],
-  summary: 'List registered workers (paginated)',
+  summary: 'List registered workers (paginated, optionally filtered)',
+  description:
+    'name/email match as case-insensitive substrings; is_active matches exactly. Any combination of filters may be supplied together.',
   querystring: {
     type: 'object',
     properties: {
       page: { type: 'integer', minimum: 1, default: 1 },
-      limit: { type: 'integer', minimum: 1, default: 20 },
+      limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+      name: { type: 'string', maxLength: 255 },
+      email: { type: 'string', maxLength: 255 },
+      is_active: { type: 'boolean' },
     },
   },
   response: {

@@ -48,4 +48,28 @@ describe('GET /api/customers (router + controller)', () => {
 
     expect(customerServiceMock.list).toHaveBeenCalledWith({ page: 2, limit: 5 });
   });
+
+  it('returns 400 schema validation error when limit exceeds the maximum, without calling the service', async () => {
+    const response = await app.inject({ method: 'GET', url: '/api/customers?limit=101' });
+
+    expect(response.statusCode).toBe(400);
+    expect(customerServiceMock.list).not.toHaveBeenCalled();
+  });
+
+  it('passes name/email/is_active querystring filters through to the service', async () => {
+    customerServiceMock.list.mockResolvedValue({ rows: [], count: 0, page: 1, limit: 20, totalPages: 0 });
+
+    await app.inject({ method: 'GET', url: '/api/customers?name=ali&email=example.com&is_active=true' });
+
+    expect(customerServiceMock.list).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'ali', email: 'example.com', is_active: true })
+    );
+  });
+
+  it('returns 400 schema validation error when is_active is not a boolean, without calling the service', async () => {
+    const response = await app.inject({ method: 'GET', url: '/api/customers?is_active=maybe' });
+
+    expect(response.statusCode).toBe(400);
+    expect(customerServiceMock.list).not.toHaveBeenCalled();
+  });
 });

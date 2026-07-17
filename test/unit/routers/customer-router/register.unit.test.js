@@ -14,6 +14,8 @@ class MockCustomerService {
 jest.unstable_mockModule('#services/customer.service', () => ({ CustomerService: MockCustomerService }));
 
 const { buildApp } = await import('#src/index');
+const { ConflictError } = await import('#configs/error');
+const { ACCOUNT_ERROR_CODES } = await import('#constants/error-codes.const');
 
 describe('POST /api/customers (router + controller)', () => {
   let app;
@@ -32,10 +34,10 @@ describe('POST /api/customers (router + controller)', () => {
   });
 
   it('returns 201 with the registered customer', async () => {
-    const customer = { id: 1, name: 'Alice', email: 'alice@example.com' };
+    const customer = { id: 1, name: 'Alice', email: 'alice@example.com', address: '1 Main St' };
     customerServiceMock.register.mockResolvedValue(customer);
 
-    const payload = { name: 'Alice', email: 'alice@example.com', password: 'secret' };
+    const payload = { name: 'Alice', email: 'alice@example.com', password: 'secret', address: '1 Main St' };
     const response = await app.inject({ method: 'POST', url: '/api/customers', payload });
 
     expect(response.statusCode).toBe(201);
@@ -43,10 +45,43 @@ describe('POST /api/customers (router + controller)', () => {
     expect(customerServiceMock.register).toHaveBeenCalledWith(payload);
   });
 
-  it('returns 400 schema validation error when name/email/password is missing, without calling the service', async () => {
+  it('returns 400 schema validation error when name/email/password/address is missing, without calling the service', async () => {
     const response = await app.inject({ method: 'POST', url: '/api/customers', payload: {} });
 
     expect(response.statusCode).toBe(400);
     expect(customerServiceMock.register).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 schema validation error when address is missing, without calling the service', async () => {
+    const payload = { name: 'Alice', email: 'alice@example.com', password: 'secret' };
+    const response = await app.inject({ method: 'POST', url: '/api/customers', payload });
+
+    expect(response.statusCode).toBe(400);
+    expect(customerServiceMock.register).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 schema validation error when name/email/address exceeds 255 chars, without calling the service', async () => {
+    const tooLong = 'a'.repeat(256);
+    const payload = { name: tooLong, email: `${tooLong}@example.com`, password: 'secret', address: tooLong };
+    const response = await app.inject({ method: 'POST', url: '/api/customers', payload });
+
+    expect(response.statusCode).toBe(400);
+    expect(customerServiceMock.register).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 with EMAIL_ALREADY_REGISTERED when the service reports a duplicate email', async () => {
+    customerServiceMock.register.mockRejectedValue(
+      new ConflictError('Email already registered', { code: ACCOUNT_ERROR_CODES.EMAIL_ALREADY_REGISTERED })
+    );
+
+    const payload = { name: 'Alice', email: 'alice@example.com', password: 'secret', address: '1 Main St' };
+    const response = await app.inject({ method: 'POST', url: '/api/customers', payload });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      success: false,
+      message: 'Email already registered',
+      code: ACCOUNT_ERROR_CODES.EMAIL_ALREADY_REGISTERED,
+    });
   });
 });

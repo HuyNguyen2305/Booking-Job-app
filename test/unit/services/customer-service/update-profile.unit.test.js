@@ -8,7 +8,7 @@ const customerRepositoryMock = {
 const { CustomerService } = await import('#services/customer.service');
 const { NotFoundError } = await import('#configs/error');
 
-describe('CustomerService.updateName', () => {
+describe('CustomerService.updateProfile', () => {
   let service;
 
   beforeEach(() => {
@@ -20,7 +20,7 @@ describe('CustomerService.updateName', () => {
   it('throws NotFoundError when the customer does not exist', async () => {
     customerRepositoryMock.getOne.mockResolvedValue(null);
 
-    await expect(service.updateName(999, 'Bob')).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.updateProfile(999, { name: 'Bob' })).rejects.toBeInstanceOf(NotFoundError);
     expect(customerRepositoryMock.update).not.toHaveBeenCalled();
   });
 
@@ -29,9 +29,20 @@ describe('CustomerService.updateName', () => {
     const updated = { id: 1, name: 'Bob' };
     customerRepositoryMock.update.mockResolvedValue(updated);
 
-    const result = await service.updateName(1, 'Bob');
+    const result = await service.updateProfile(1, { name: 'Bob' });
 
     expect(customerRepositoryMock.update).toHaveBeenCalledWith({ id: 1 }, { name: 'Bob' });
+    expect(result).toBe(updated);
+  });
+
+  it('updates the name and address together when both are given', async () => {
+    customerRepositoryMock.getOne.mockResolvedValue({ id: 1, name: 'Alice', address: '1 Old St' });
+    const updated = { id: 1, name: 'Bob', address: '2 New St' };
+    customerRepositoryMock.update.mockResolvedValue(updated);
+
+    const result = await service.updateProfile(1, { name: 'Bob', address: '2 New St' });
+
+    expect(customerRepositoryMock.update).toHaveBeenCalledWith({ id: 1 }, { name: 'Bob', address: '2 New St' });
     expect(result).toBe(updated);
   });
 });

@@ -1,5 +1,8 @@
 import { REPOSITORY_KEYS, SERVICE_KEYS } from '#constants/singleton';
-import { NotFoundError } from '#configs/error';
+import { NotFoundError, ConflictError } from '#configs/error';
+import { ACCOUNT_ERROR_CODES } from '#constants/error-codes.const';
+import { isUniqueConstraintError } from '#utils/sequelize-error.util';
+import { buildAccountSearchWhere } from '#utils/account-search.util';
 import { hashPassword } from '#src/common/auth/password.util';
 
 export class CustomerService {
@@ -8,13 +11,21 @@ export class CustomerService {
     this.bookingService = container.resolve(SERVICE_KEYS.BOOKING);
   }
 
-  async register({ name, email, password }) {
+  async register({ name, email, password, address }) {
     const password_hash = await hashPassword(password);
-    return this.customerRepository.create({ name, email, password_hash });
+    try {
+      return await this.customerRepository.create({ name, email, password_hash, address });
+    } catch (err) {
+      if (isUniqueConstraintError(err)) {
+        throw new ConflictError('Email already registered', { code: ACCOUNT_ERROR_CODES.EMAIL_ALREADY_REGISTERED });
+      }
+      throw err;
+    }
   }
 
-  async list({ page, limit } = {}) {
-    return this.customerRepository.pagination({ order: [['id', 'ASC']], page, limit });
+  async list({ page, limit, name, email, is_active } = {}) {
+    const where = buildAccountSearchWhere({ name, email, is_active });
+    return this.customerRepository.pagination({ where, order: [['id', 'ASC']], page, limit });
   }
 
   async getById(id) {
@@ -25,12 +36,16 @@ export class CustomerService {
     return customer;
   }
 
-  async updateName(id, name) {
+  async updateProfile(id, { name, address } = {}) {
     const customer = await this.customerRepository.getOne({ where: { id } });
     if (!customer) {
       throw new NotFoundError('Customer not found');
     }
-    return this.customerRepository.update({ id }, { name });
+    const updates = { name };
+    if (address !== undefined) {
+      updates.address = address;
+    }
+    return this.customerRepository.update({ id }, updates);
   }
 
   /**

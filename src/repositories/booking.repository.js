@@ -65,4 +65,21 @@ export class BookingRepository extends BaseRepository {
       transaction,
     });
   }
+
+  /**
+   * Compare-and-swap status update: only writes if the row's status still matches
+   * `fromStatus` at write time. Returns null (not the stale row) if another transaction
+   * already changed it — callers must treat null as "lost the race," not "not found."
+   * Re-fetches by id only (not by the old status) since BaseRepository.update's
+   * re-fetch-by-original-where would incorrectly report failure on a real, successful
+   * status change (the row no longer matches `status: fromStatus` after the write).
+   */
+  async updateStatusIfUnchanged(id, fromStatus, toStatus, { transaction } = {}) {
+    const [affected] = await this.model.update(
+      { status: toStatus },
+      { where: { id, status: fromStatus }, transaction }
+    );
+    if (affected === 0) return null;
+    return this.getOne({ where: { id }, transaction });
+  }
 }

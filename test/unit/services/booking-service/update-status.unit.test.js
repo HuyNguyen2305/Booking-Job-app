@@ -2,7 +2,7 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 
 const bookingRepositoryMock = {
   getOne: jest.fn(),
-  update: jest.fn(),
+  updateStatusIfUnchanged: jest.fn(),
 };
 const workerRepositoryMock = {
   incrementTotalHours: jest.fn(),
@@ -34,7 +34,7 @@ describe('BookingService.updateStatus', () => {
     bookingRepositoryMock.getOne.mockResolvedValue(null);
 
     await expect(service.updateStatus(1, BOOKING_STATUS.CONFIRMED)).rejects.toThrow(NotFoundError);
-    expect(bookingRepositoryMock.update).not.toHaveBeenCalled();
+    expect(bookingRepositoryMock.updateStatusIfUnchanged).not.toHaveBeenCalled();
   });
 
   const allowedTransitions = [
@@ -46,11 +46,11 @@ describe('BookingService.updateStatus', () => {
   it.each(allowedTransitions)('allows transition from %s to %s', async (currentStatus, nextStatus) => {
     bookingRepositoryMock.getOne.mockResolvedValue({ id: 1, status: currentStatus });
     const updatedBooking = { id: 1, status: nextStatus };
-    bookingRepositoryMock.update.mockResolvedValue(updatedBooking);
+    bookingRepositoryMock.updateStatusIfUnchanged.mockResolvedValue(updatedBooking);
 
     const result = await service.updateStatus(1, nextStatus);
 
-    expect(bookingRepositoryMock.update).toHaveBeenCalledWith({ id: 1 }, { status: nextStatus });
+    expect(bookingRepositoryMock.updateStatusIfUnchanged).toHaveBeenCalledWith(1, currentStatus, nextStatus);
     expect(result).toBe(updatedBooking);
     expect(workerRepositoryMock.incrementTotalHours).not.toHaveBeenCalled();
   });
@@ -67,7 +67,7 @@ describe('BookingService.updateStatus', () => {
     bookingRepositoryMock.getOne.mockResolvedValue({ id: 1, status: currentStatus });
 
     await expect(service.updateStatus(1, nextStatus)).rejects.toThrow(ConflictError);
-    expect(bookingRepositoryMock.update).not.toHaveBeenCalled();
+    expect(bookingRepositoryMock.updateStatusIfUnchanged).not.toHaveBeenCalled();
   });
 
   describe('transitioning to CANCELLED after start_time has passed', () => {
@@ -81,7 +81,7 @@ describe('BookingService.updateStatus', () => {
       await expect(service.updateStatus(1, BOOKING_STATUS.CANCELLED)).rejects.toMatchObject({
         code: BOOKING_ERROR_CODES.PAST_BOOKING_TIME,
       });
-      expect(bookingRepositoryMock.update).not.toHaveBeenCalled();
+      expect(bookingRepositoryMock.updateStatusIfUnchanged).not.toHaveBeenCalled();
     });
 
     it('still cancels a PENDING booking regardless of timing (nobody ever committed to it)', async () => {
@@ -91,11 +91,15 @@ describe('BookingService.updateStatus', () => {
         start_time: new Date('2020-01-06T02:00:00.000Z'),
       });
       const updatedBooking = { id: 1, status: BOOKING_STATUS.CANCELLED };
-      bookingRepositoryMock.update.mockResolvedValue(updatedBooking);
+      bookingRepositoryMock.updateStatusIfUnchanged.mockResolvedValue(updatedBooking);
 
       const result = await service.updateStatus(1, BOOKING_STATUS.CANCELLED);
 
-      expect(bookingRepositoryMock.update).toHaveBeenCalledWith({ id: 1 }, { status: BOOKING_STATUS.CANCELLED });
+      expect(bookingRepositoryMock.updateStatusIfUnchanged).toHaveBeenCalledWith(
+        1,
+        BOOKING_STATUS.PENDING,
+        BOOKING_STATUS.CANCELLED
+      );
       expect(result).toBe(updatedBooking);
     });
 
@@ -108,7 +112,7 @@ describe('BookingService.updateStatus', () => {
         end_time: '2020-01-06T04:00:00.000Z',
       });
       const updatedBooking = { id: 1, status: BOOKING_STATUS.COMPLETED };
-      bookingRepositoryMock.update.mockResolvedValue(updatedBooking);
+      bookingRepositoryMock.updateStatusIfUnchanged.mockResolvedValue(updatedBooking);
 
       const result = await service.updateStatus(1, BOOKING_STATUS.COMPLETED);
 
@@ -128,13 +132,14 @@ describe('BookingService.updateStatus', () => {
     it('completes the booking and atomically adds its duration to the worker\'s total_hours in one transaction', async () => {
       bookingRepositoryMock.getOne.mockResolvedValue(booking);
       const updatedBooking = { id: 1, status: BOOKING_STATUS.COMPLETED };
-      bookingRepositoryMock.update.mockResolvedValue(updatedBooking);
+      bookingRepositoryMock.updateStatusIfUnchanged.mockResolvedValue(updatedBooking);
 
       const result = await service.updateStatus(1, BOOKING_STATUS.COMPLETED);
 
-      expect(bookingRepositoryMock.update).toHaveBeenCalledWith(
-        { id: 1 },
-        { status: BOOKING_STATUS.COMPLETED },
+      expect(bookingRepositoryMock.updateStatusIfUnchanged).toHaveBeenCalledWith(
+        1,
+        BOOKING_STATUS.CONFIRMED,
+        BOOKING_STATUS.COMPLETED,
         { transaction: 'mock-transaction' }
       );
       expect(workerRepositoryMock.incrementTotalHours).toHaveBeenCalledWith(7, 2.5, { transaction: 'mock-transaction' });
@@ -147,11 +152,30 @@ describe('BookingService.updateStatus', () => {
       // (see worker-service/update-status.integration.test.js's analogous case) —
       // this only checks the error surfaces from updateStatus rather than being lost.
       bookingRepositoryMock.getOne.mockResolvedValue(booking);
-      bookingRepositoryMock.update.mockResolvedValue({ id: 1, status: BOOKING_STATUS.COMPLETED });
+      bookingRepositoryMock.updateStatusIfUnchanged.mockResolvedValue({ id: 1, status: BOOKING_STATUS.COMPLETED });
       workerRepositoryMock.incrementTotalHours.mockRejectedValue(new Error('db error'));
       sequelizeMock.transaction.mockImplementation(async (callback) => callback('mock-transaction'));
 
       await expect(service.updateStatus(1, BOOKING_STATUS.COMPLETED)).rejects.toThrow('db error');
+    });
+
+    it('throws ConflictError with CONCURRENT_STATUS_CHANGE when a concurrent transition wins the race, without incrementing hours', async () => {
+      bookingRepositoryMock.getOne.mockResolvedValue(booking);
+      bookingRepositoryMock.updateStatusIfUnchanged.mockResolvedValue(null);
+
+      await expect(service.updateStatus(1, BOOKING_STATUS.COMPLETED)).rejects.toMatchObject({
+        code: BOOKING_ERROR_CODES.CONCURRENT_STATUS_CHANGE,
+      });
+      expect(workerRepositoryMock.incrementTotalHours).not.toHaveBeenCalled();
+    });
+  });
+
+  it('throws ConflictError with CONCURRENT_STATUS_CHANGE for a non-COMPLETED transition when the race is lost', async () => {
+    bookingRepositoryMock.getOne.mockResolvedValue({ id: 1, status: BOOKING_STATUS.PENDING });
+    bookingRepositoryMock.updateStatusIfUnchanged.mockResolvedValue(null);
+
+    await expect(service.updateStatus(1, BOOKING_STATUS.CONFIRMED)).rejects.toMatchObject({
+      code: BOOKING_ERROR_CODES.CONCURRENT_STATUS_CHANGE,
     });
   });
 });

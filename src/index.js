@@ -59,6 +59,7 @@ export async function buildApp(opts = {}) {
         { name: 'Workers', description: 'Worker roster and availability endpoints' },
         { name: 'Holidays', description: 'Company holiday admin endpoints' },
         { name: 'Customers', description: 'Customer roster endpoints' },
+        { name: 'Admins', description: 'Admin account management endpoints' },
         { name: 'Auth', description: 'Login endpoints (admin/worker/customer)' },
       ],
       components: {

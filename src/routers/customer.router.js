@@ -3,6 +3,7 @@ import { ROLES } from '#constants/role.const';
 import { requireRole } from '#src/common/auth/require-role';
 import {
   registerCustomerSchema,
+  createCustomerSchema,
   listCustomersSchema,
   updateCustomerSchema,
   getCustomerSchema,
@@ -25,6 +26,15 @@ class CustomerRouter {
     });
 
     this.fastify.route({
+      method: 'POST',
+      url: '/api/customers/create',
+      schema: createCustomerSchema,
+      config: { responseFormat: 'standard' },
+      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN)],
+      handler: this.customerController.register.bind(this.customerController),
+    });
+
+    this.fastify.route({
       method: 'GET',
       url: '/api/customers',
       schema: listCustomersSchema,
@@ -39,7 +49,7 @@ class CustomerRouter {
       schema: updateCustomerSchema,
       config: { responseFormat: 'standard' },
       preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN, ROLES.CUSTOMER)],
-      handler: this.customerController.updateName.bind(this.customerController),
+      handler: this.customerController.updateProfile.bind(this.customerController),
     });
 
     this.fastify.route({

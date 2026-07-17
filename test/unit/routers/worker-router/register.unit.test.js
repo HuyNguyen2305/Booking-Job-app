@@ -15,6 +15,8 @@ class MockWorkerService {
 jest.unstable_mockModule('#services/worker.service', () => ({ WorkerService: MockWorkerService }));
 
 const { buildApp } = await import('#src/index');
+const { ConflictError } = await import('#configs/error');
+const { ACCOUNT_ERROR_CODES } = await import('#constants/error-codes.const');
 
 describe('POST /api/workers and GET /api/workers (router + controller)', () => {
   let app;
@@ -48,6 +50,31 @@ describe('POST /api/workers and GET /api/workers (router + controller)', () => {
 
     expect(response.statusCode).toBe(400);
     expect(workerServiceMock.register).not.toHaveBeenCalled();
+  });
+
+  it('POST /api/workers returns 400 schema validation error when name/email exceeds 255 chars', async () => {
+    const tooLong = 'a'.repeat(256);
+    const payload = { name: tooLong, email: `${tooLong}@example.com`, password: 'secret' };
+    const response = await app.inject({ method: 'POST', url: '/api/workers', payload });
+
+    expect(response.statusCode).toBe(400);
+    expect(workerServiceMock.register).not.toHaveBeenCalled();
+  });
+
+  it('POST /api/workers returns 409 with EMAIL_ALREADY_REGISTERED when the service reports a duplicate email', async () => {
+    workerServiceMock.register.mockRejectedValue(
+      new ConflictError('Email already registered', { code: ACCOUNT_ERROR_CODES.EMAIL_ALREADY_REGISTERED })
+    );
+
+    const payload = { name: 'Alice', email: 'alice@example.com', password: 'secret' };
+    const response = await app.inject({ method: 'POST', url: '/api/workers', payload });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      success: false,
+      message: 'Email already registered',
+      code: ACCOUNT_ERROR_CODES.EMAIL_ALREADY_REGISTERED,
+    });
   });
 
   it('GET /api/workers returns 200 with a paginated roster', async () => {

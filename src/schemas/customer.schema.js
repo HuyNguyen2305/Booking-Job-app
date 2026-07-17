@@ -6,6 +6,7 @@ const customerSchema = {
     id: { type: 'integer' },
     name: { type: 'string' },
     email: { type: 'string' },
+    address: { type: 'string' },
     is_active: { type: 'boolean' },
   },
 };
@@ -15,11 +16,32 @@ export const registerCustomerSchema = {
   summary: 'Register a new customer (self-signup)',
   body: {
     type: 'object',
-    required: ['name', 'email', 'password'],
+    required: ['name', 'email', 'password', 'address'],
     properties: {
-      name: { type: 'string', minLength: 1 },
-      email: { type: 'string', format: 'email' },
+      name: { type: 'string', minLength: 1, maxLength: 255 },
+      email: { type: 'string', format: 'email', maxLength: 255 },
       password: { type: 'string', minLength: 1 },
+      address: { type: 'string', minLength: 1, maxLength: 255 },
+    },
+  },
+  response: {
+    201: buildSuccessResponse(customerSchema),
+  },
+};
+
+export const createCustomerSchema = {
+  tags: ['Customers'],
+  summary: 'Create a new customer (admin-initiated, e.g. phone/walk-in booking)',
+  description:
+    'Admin-only. Same account shape as self-signup — the initial password is chosen by the admin and relayed to the customer out-of-band.',
+  body: {
+    type: 'object',
+    required: ['name', 'email', 'password', 'address'],
+    properties: {
+      name: { type: 'string', minLength: 1, maxLength: 255 },
+      email: { type: 'string', format: 'email', maxLength: 255 },
+      password: { type: 'string', minLength: 1 },
+      address: { type: 'string', minLength: 1, maxLength: 255 },
     },
   },
   response: {
@@ -29,12 +51,17 @@ export const registerCustomerSchema = {
 
 export const listCustomersSchema = {
   tags: ['Customers'],
-  summary: 'List registered customers (paginated)',
+  summary: 'List registered customers (paginated, optionally filtered)',
+  description:
+    'name/email match as case-insensitive substrings; is_active matches exactly. Any combination of filters may be supplied together.',
   querystring: {
     type: 'object',
     properties: {
       page: { type: 'integer', minimum: 1, default: 1 },
-      limit: { type: 'integer', minimum: 1, default: 20 },
+      limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+      name: { type: 'string', maxLength: 255 },
+      email: { type: 'string', maxLength: 255 },
+      is_active: { type: 'boolean' },
     },
   },
   response: {
@@ -89,7 +116,7 @@ export const deleteCustomerSchema = {
 
 export const updateCustomerSchema = {
   tags: ['Customers'],
-  summary: "Update a customer's name",
+  summary: "Update a customer's name and/or address",
   params: {
     type: 'object',
     required: ['id'],
@@ -101,7 +128,8 @@ export const updateCustomerSchema = {
     type: 'object',
     required: ['name'],
     properties: {
-      name: { type: 'string', minLength: 1 },
+      name: { type: 'string', minLength: 1, maxLength: 255 },
+      address: { type: 'string', minLength: 1, maxLength: 255 },
     },
   },
   response: {

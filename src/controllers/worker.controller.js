@@ -19,9 +19,14 @@ export class WorkerController {
     return reply.code(201).send({ success: true, message: 'Worker registered', data: worker });
   }
 
+  async selfRegister(request, reply) {
+    const worker = await this.workerService.selfRegister(request.body);
+    return reply.code(201).send({ success: true, message: 'Worker registered — pending admin approval', data: worker });
+  }
+
   async list(request, reply) {
-    const { page, limit } = request.query;
-    const workers = await this.workerService.list({ page, limit });
+    const { page, limit, name, email, is_active } = request.query;
+    const workers = await this.workerService.list({ page, limit, name, email, is_active });
     return reply.send({ success: true, message: 'Workers retrieved', data: workers });
   }
 

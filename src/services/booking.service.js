@@ -151,16 +151,32 @@ export class BookingService {
     if (nextStatus === BOOKING_STATUS.COMPLETED) {
       // COMPLETED is terminal (never transitioned out of), so this hour count is
       // added to workers.total_hours exactly once, atomically, in the same
-      // transaction as the status flip.
+      // transaction as the status flip. The compare-and-swap write (guarded on
+      // booking.status, the value actually read above) closes a TOCTOU race where two
+      // concurrent calls (e.g. the auto-complete sweep racing a manual API call) could
+      // otherwise both pass the transition check and both increment total_hours.
       const hours = (new Date(booking.end_time) - new Date(booking.start_time)) / (1000 * 60 * 60);
       return sequelize.transaction(async (transaction) => {
-        const updated = await this.bookingRepository.update({ id }, { status: nextStatus }, { transaction });
+        const updated = await this.bookingRepository.updateStatusIfUnchanged(id, booking.status, nextStatus, {
+          transaction,
+        });
+        if (!updated) {
+          throw new ConflictError('Booking status changed concurrently, please retry', {
+            code: BOOKING_ERROR_CODES.CONCURRENT_STATUS_CHANGE,
+          });
+        }
         await this.workerRepository.incrementTotalHours(booking.worker_id, hours, { transaction });
         return updated;
       });
     }
 
-    return this.bookingRepository.update({ id }, { status: nextStatus });
+    const updated = await this.bookingRepository.updateStatusIfUnchanged(id, booking.status, nextStatus);
+    if (!updated) {
+      throw new ConflictError('Booking status changed concurrently, please retry', {
+        code: BOOKING_ERROR_CODES.CONCURRENT_STATUS_CHANGE,
+      });
+    }
+    return updated;
   }
 
   /**
@@ -375,15 +391,29 @@ export class BookingService {
         (candidateId) => candidateId !== workerId
       );
 
+      // Each candidate is attempted inside a SAVEPOINT nested in the caller's outer
+      // transaction (not a fresh top-level one like _tryCandidates uses) — a lost race
+      // against the EXCLUDE constraint only rolls back that candidate's attempt, so the
+      // next candidate (or the next booking) can still proceed within the same outer
+      // transaction, while a genuinely-unavailable-for-everyone booking still throws and
+      // rolls back the whole deactivation, same as before.
       let newWorkerId = null;
       for (const candidateId of candidateIds) {
-        const free = await this.bookingAvailabilityService.isWorkerFree(candidateId, startISO, endISO, {
-          transaction,
-          excludeId: booking.id,
-        });
-        if (free) {
+        try {
+          await sequelize.transaction({ transaction }, async (savepoint) => {
+            const free = await this.bookingAvailabilityService.isWorkerFree(candidateId, startISO, endISO, {
+              transaction: savepoint,
+              excludeId: booking.id,
+            });
+            if (!free) throw SKIP_CANDIDATE;
+
+            return this.bookingRepository.update({ id: booking.id }, { worker_id: candidateId }, { transaction: savepoint });
+          });
           newWorkerId = candidateId;
           break;
+        } catch (err) {
+          if (err === SKIP_CANDIDATE || isExclusionConstraintError(err)) continue;
+          throw err;
         }
       }
 
@@ -393,7 +423,6 @@ export class BookingService {
         });
       }
 
-      await this.bookingRepository.update({ id: booking.id }, { worker_id: newWorkerId }, { transaction });
       reassignments.push({ booking_id: booking.id, new_worker_id: newWorkerId });
     }
 

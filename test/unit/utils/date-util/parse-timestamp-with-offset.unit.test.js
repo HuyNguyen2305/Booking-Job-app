@@ -14,6 +14,12 @@ describe('DateUtil.parseTimestampWithOffset', () => {
     expect(dt.isValid).toBe(true);
   });
 
+  it('returns a valid DateTime for a timestamp with a lowercase z suffix', () => {
+    const dt = parseTimestampWithOffset('2026-07-10T09:00:00z');
+    expect(dt).not.toBeNull();
+    expect(dt.isValid).toBe(true);
+  });
+
   it('returns null when the offset is missing', () => {
     expect(parseTimestampWithOffset('2026-07-10T09:00:00')).toBeNull();
   });

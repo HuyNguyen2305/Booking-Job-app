@@ -33,7 +33,7 @@ class BookingRouter {
       url: '/api/bookings/:id/status',
       schema: updateBookingStatusSchema,
       config: { responseFormat: 'standard' },
-      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN, ROLES.WORKER)],
+      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN, ROLES.WORKER, ROLES.CUSTOMER)],
       handler: this.bookingController.updateStatus.bind(this.bookingController),
     });
 

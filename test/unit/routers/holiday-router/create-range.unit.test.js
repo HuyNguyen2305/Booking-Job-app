@@ -55,6 +55,17 @@ describe('POST /api/holidays/range (router + controller + error handler)', () =>
     expect(holidayServiceMock.createRange).not.toHaveBeenCalled();
   });
 
+  it('returns 400 schema validation error when name exceeds 255 chars, without calling the service', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/holidays/range',
+      payload: { name: 'a'.repeat(256), start_date: '2027-02-06', end_date: '2027-02-08' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(holidayServiceMock.createRange).not.toHaveBeenCalled();
+  });
+
   it('returns 400 in the custom error shape when the service rejects an invalid range', async () => {
     holidayServiceMock.createRange.mockRejectedValue(new ValidationError('end_date must not be before start_date'));
 

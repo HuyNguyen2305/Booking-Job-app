@@ -21,5 +21,6 @@ export const CONTROLLER_KEYS = {
   WORKER: 'workerController',
   HOLIDAY: 'holidayController',
   CUSTOMER: 'customerController',
+  ADMIN: 'adminController',
   AUTH: 'authController',
 };

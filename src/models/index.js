@@ -13,5 +13,3 @@ Worker.init(sequelize);
 Holiday.init(sequelize);
 Customer.init(sequelize);
 Admin.init(sequelize);
-
-export const models = { Booking, Worker, Holiday, Customer, Admin };

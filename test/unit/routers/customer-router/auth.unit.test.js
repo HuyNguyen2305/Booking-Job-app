@@ -4,7 +4,7 @@ const customerServiceMock = {
   register: jest.fn(),
   list: jest.fn(),
   getById: jest.fn(),
-  updateName: jest.fn(),
+  updateProfile: jest.fn(),
   remove: jest.fn(),
 };
 
@@ -47,6 +47,41 @@ describe('Customer router auth enforcement (NODE_ENV=production)', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('POST /api/customers/create returns 401 without a bearer token', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/customers/create',
+      payload: { name: 'Alice', email: 'alice@example.com', password: 'secret', address: '1 Main St' },
+    });
+    expect(response.statusCode).toBe(401);
+    expect(customerServiceMock.register).not.toHaveBeenCalled();
+  });
+
+  it('POST /api/customers/create returns 403 for a non-admin role', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/customers/create',
+      headers: { authorization: `Bearer ${customerToken}` },
+      payload: { name: 'Alice', email: 'alice@example.com', password: 'secret', address: '1 Main St' },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(customerServiceMock.register).not.toHaveBeenCalled();
+  });
+
+  it('POST /api/customers/create returns 201 for ADMIN', async () => {
+    customerServiceMock.register.mockResolvedValue({ id: 1, name: 'Alice' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/customers/create',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { name: 'Alice', email: 'alice@example.com', password: 'secret', address: '1 Main St' },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(customerServiceMock.register).toHaveBeenCalled();
   });
 
   it('GET /api/customers returns 401 without a bearer token', async () => {

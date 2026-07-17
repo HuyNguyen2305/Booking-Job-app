@@ -88,7 +88,9 @@ export const updateBookingStatusSchema = {
   tags: ['Bookings'],
   summary: 'Update a booking status',
   description:
-    'Allowed transitions: PENDING -> CONFIRMED, CONFIRMED -> COMPLETED, PENDING -> CANCELLED, CONFIRMED -> CANCELLED.',
+    'Allowed transitions: PENDING -> CONFIRMED, CONFIRMED -> COMPLETED, PENDING -> CANCELLED, CONFIRMED -> CANCELLED. ' +
+    'Role rule: the assigned Worker may only move a booking to CONFIRMED (accepting the job); only the owning Customer ' +
+    '(or Admin) may move it to COMPLETED or CANCELLED.',
   params: {
     type: 'object',
     required: ['id'],
@@ -112,17 +114,17 @@ export const listBookingsSchema = {
   tags: ['Bookings'],
   summary: "List a worker's or customer's bookings (paginated)",
   description:
-    'Returns bookings sorted by start_time ascending, filtered by either worker_id or customer_id (exactly one required). Optionally filter to bookings overlapping a [from, to] window.',
+    'Returns bookings sorted by start_time ascending, filtered by either worker_id or customer_id (supplying both is rejected). Optionally filter to bookings overlapping a [from, to] window. A Worker/Customer caller is always scoped to their own id regardless of these params and may omit both entirely; Admin must supply exactly one of worker_id/customer_id.',
   querystring: {
     type: 'object',
-    anyOf: [{ required: ['worker_id'] }, { required: ['customer_id'] }],
+    not: { required: ['worker_id', 'customer_id'] },
     properties: {
       worker_id: { type: 'integer', minimum: 1 },
       customer_id: { type: 'integer', minimum: 1 },
       from: { type: 'string', format: 'date-time' },
       to: { type: 'string', format: 'date-time' },
       page: { type: 'integer', minimum: 1, default: 1 },
-      limit: { type: 'integer', minimum: 1, default: 20 },
+      limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
     },
   },
   response: {

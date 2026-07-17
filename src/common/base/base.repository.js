@@ -29,10 +29,6 @@ export class BaseRepository {
     return this.model.destroy({ where, transaction });
   }
 
-  async softDelete(where, { transaction } = {}) {
-    return this.model.destroy({ where, transaction });
-  }
-
   async pagination({ where = {}, page = 1, limit = 20, order = [], transaction } = {}) {
     const offset = (page - 1) * limit;
     const { rows, count } = await this.model.findAndCountAll({ where, limit, offset, order, transaction });

@@ -55,4 +55,15 @@ describe('POST /api/holidays (router + controller + error handler)', () => {
     expect(response.statusCode).toBe(400);
     expect(holidayServiceMock.create).not.toHaveBeenCalled();
   });
+
+  it('returns 400 schema validation error when name exceeds 255 chars, without calling the service', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/holidays',
+      payload: { holiday_date: '2026-12-25', name: 'a'.repeat(256) },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(holidayServiceMock.create).not.toHaveBeenCalled();
+  });
 });
