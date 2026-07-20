@@ -46,14 +46,12 @@ describe('WorkerService.selfRegister (integration)', () => {
     const first = await workerService.selfRegister({ name: 'First', email, password: 'secret' });
     workerIds.push(first.id);
 
-    await expect(
-      workerService.selfRegister({ name: 'Second', email, password: 'secret' })
-    ).rejects.toMatchObject({
+    await expect(workerService.selfRegister({ name: 'Second', email, password: 'secret' })).rejects.toMatchObject({
       code: ACCOUNT_ERROR_CODES.EMAIL_ALREADY_REGISTERED,
     });
-    await expect(
-      workerService.selfRegister({ name: 'Second', email, password: 'secret' })
-    ).rejects.toBeInstanceOf(ConflictError);
+    await expect(workerService.selfRegister({ name: 'Second', email, password: 'secret' })).rejects.toBeInstanceOf(
+      ConflictError
+    );
 
     // Confirm no stray second row was left behind by the failed attempt.
     const matching = await Worker.findAll({ where: { email } });

@@ -14,7 +14,9 @@ describe('BaseRepository.update (integration)', () => {
   });
 
   it('updates the matching row and returns the updated record', async () => {
-    const ctx = await seedWithTransaction([{ table: 'workers', rows: [{ id: 9201, name: 'Base Update Worker', is_active: true }] }]);
+    const ctx = await seedWithTransaction([
+      { table: 'workers', rows: [{ id: 9201, name: 'Base Update Worker', is_active: true }] },
+    ]);
     rollback = ctx.rollback;
 
     await ctx.run(async (transaction) => {

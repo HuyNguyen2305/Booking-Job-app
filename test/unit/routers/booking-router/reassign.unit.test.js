@@ -78,7 +78,9 @@ describe('PATCH /api/bookings/:id/reassign (router + controller + error handler)
   });
 
   it('returns 409 when the booking is COMPLETED/CANCELLED', async () => {
-    bookingServiceMock.reassignBooking.mockRejectedValue(new ConflictError('Cannot reassign a booking with status COMPLETED'));
+    bookingServiceMock.reassignBooking.mockRejectedValue(
+      new ConflictError('Cannot reassign a booking with status COMPLETED')
+    );
 
     const response = await app.inject({ method: 'PATCH', url: '/api/bookings/1/reassign' });
 

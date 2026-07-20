@@ -47,7 +47,12 @@ describe('BookingService.reassignBookingsFromWorker', () => {
 
   it('reassigns a single booking to the best available other active worker', async () => {
     bookingRepositoryMock.listReassignableForWorker.mockResolvedValue([
-      { id: 10, worker_id: 1, start_time: new Date('2026-07-14T09:00:00+07:00'), end_time: new Date('2026-07-14T09:30:00+07:00') },
+      {
+        id: 10,
+        worker_id: 1,
+        start_time: new Date('2026-07-14T09:00:00+07:00'),
+        end_time: new Date('2026-07-14T09:30:00+07:00'),
+      },
     ]);
     workerRepositoryMock.listActive.mockResolvedValue([{ id: 1 }, { id: 2 }]);
     workerRepositoryMock.getAvailability.mockResolvedValue([{ worker_id: 2, has_overlap: false, booked_hours: 0 }]);
@@ -74,7 +79,12 @@ describe('BookingService.reassignBookingsFromWorker', () => {
 
   it('never offers the worker being deactivated as its own replacement', async () => {
     bookingRepositoryMock.listReassignableForWorker.mockResolvedValue([
-      { id: 10, worker_id: 1, start_time: new Date('2026-07-14T09:00:00+07:00'), end_time: new Date('2026-07-14T09:30:00+07:00') },
+      {
+        id: 10,
+        worker_id: 1,
+        start_time: new Date('2026-07-14T09:00:00+07:00'),
+        end_time: new Date('2026-07-14T09:30:00+07:00'),
+      },
     ]);
     // Worker 1 (being deactivated) is still active in the roster at this point in the
     // transaction (its is_active flip hasn't happened yet) — it must still be excluded.
@@ -88,7 +98,12 @@ describe('BookingService.reassignBookingsFromWorker', () => {
 
   it('throws ConflictError with WORKER_UNAVAILABLE when a booking has no available replacement', async () => {
     bookingRepositoryMock.listReassignableForWorker.mockResolvedValue([
-      { id: 10, worker_id: 1, start_time: new Date('2026-07-14T09:00:00+07:00'), end_time: new Date('2026-07-14T09:30:00+07:00') },
+      {
+        id: 10,
+        worker_id: 1,
+        start_time: new Date('2026-07-14T09:00:00+07:00'),
+        end_time: new Date('2026-07-14T09:30:00+07:00'),
+      },
     ]);
     workerRepositoryMock.listActive.mockResolvedValue([{ id: 1 }, { id: 2 }]);
     workerRepositoryMock.getAvailability.mockResolvedValue([{ worker_id: 2, has_overlap: false, booked_hours: 0 }]);
@@ -103,8 +118,18 @@ describe('BookingService.reassignBookingsFromWorker', () => {
 
   it('stops at the first unassignable booking without reassigning later ones', async () => {
     bookingRepositoryMock.listReassignableForWorker.mockResolvedValue([
-      { id: 10, worker_id: 1, start_time: new Date('2026-07-14T09:00:00+07:00'), end_time: new Date('2026-07-14T09:30:00+07:00') },
-      { id: 11, worker_id: 1, start_time: new Date('2026-07-14T11:00:00+07:00'), end_time: new Date('2026-07-14T11:30:00+07:00') },
+      {
+        id: 10,
+        worker_id: 1,
+        start_time: new Date('2026-07-14T09:00:00+07:00'),
+        end_time: new Date('2026-07-14T09:30:00+07:00'),
+      },
+      {
+        id: 11,
+        worker_id: 1,
+        start_time: new Date('2026-07-14T11:00:00+07:00'),
+        end_time: new Date('2026-07-14T11:30:00+07:00'),
+      },
     ]);
     workerRepositoryMock.listActive.mockResolvedValue([{ id: 1 }, { id: 2 }]);
     workerRepositoryMock.getAvailability.mockResolvedValue([{ worker_id: 2, has_overlap: false, booked_hours: 0 }]);
@@ -120,8 +145,18 @@ describe('BookingService.reassignBookingsFromWorker', () => {
 
   it('reassigns multiple bookings, each to their own best candidate', async () => {
     bookingRepositoryMock.listReassignableForWorker.mockResolvedValue([
-      { id: 10, worker_id: 1, start_time: new Date('2026-07-14T09:00:00+07:00'), end_time: new Date('2026-07-14T09:30:00+07:00') },
-      { id: 11, worker_id: 1, start_time: new Date('2026-07-14T11:00:00+07:00'), end_time: new Date('2026-07-14T11:30:00+07:00') },
+      {
+        id: 10,
+        worker_id: 1,
+        start_time: new Date('2026-07-14T09:00:00+07:00'),
+        end_time: new Date('2026-07-14T09:30:00+07:00'),
+      },
+      {
+        id: 11,
+        worker_id: 1,
+        start_time: new Date('2026-07-14T11:00:00+07:00'),
+        end_time: new Date('2026-07-14T11:30:00+07:00'),
+      },
     ]);
     workerRepositoryMock.listActive.mockResolvedValue([{ id: 1 }, { id: 2 }, { id: 3 }]);
     workerRepositoryMock.getAvailability.mockResolvedValue([
@@ -142,7 +177,12 @@ describe('BookingService.reassignBookingsFromWorker', () => {
 
   it('falls through to the next candidate when the first one loses a real EXCLUDE-constraint race', async () => {
     bookingRepositoryMock.listReassignableForWorker.mockResolvedValue([
-      { id: 10, worker_id: 1, start_time: new Date('2026-07-14T09:00:00+07:00'), end_time: new Date('2026-07-14T09:30:00+07:00') },
+      {
+        id: 10,
+        worker_id: 1,
+        start_time: new Date('2026-07-14T09:00:00+07:00'),
+        end_time: new Date('2026-07-14T09:30:00+07:00'),
+      },
     ]);
     workerRepositoryMock.listActive.mockResolvedValue([{ id: 1 }, { id: 2 }, { id: 3 }]);
     workerRepositoryMock.getAvailability.mockResolvedValue([
@@ -175,7 +215,12 @@ describe('BookingService.reassignBookingsFromWorker', () => {
 
   it('throws WORKER_UNAVAILABLE when every candidate loses the race', async () => {
     bookingRepositoryMock.listReassignableForWorker.mockResolvedValue([
-      { id: 10, worker_id: 1, start_time: new Date('2026-07-14T09:00:00+07:00'), end_time: new Date('2026-07-14T09:30:00+07:00') },
+      {
+        id: 10,
+        worker_id: 1,
+        start_time: new Date('2026-07-14T09:00:00+07:00'),
+        end_time: new Date('2026-07-14T09:30:00+07:00'),
+      },
     ]);
     workerRepositoryMock.listActive.mockResolvedValue([{ id: 1 }, { id: 2 }]);
     workerRepositoryMock.getAvailability.mockResolvedValue([{ worker_id: 2, has_overlap: false, booked_hours: 0 }]);

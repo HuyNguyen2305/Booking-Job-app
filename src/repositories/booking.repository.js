@@ -1,11 +1,7 @@
 import { Op } from 'sequelize';
 import { BaseRepository } from '#src/common/base/base.repository';
 import { Booking } from '#models/booking.model';
-import {
-  OCCUPIED_BOOKING_STATUSES,
-  ACTIVE_BOOKING_STATUSES,
-  BOOKING_STATUS,
-} from '#constants/booking-status.const';
+import { OCCUPIED_BOOKING_STATUSES, ACTIVE_BOOKING_STATUSES, BOOKING_STATUS } from '#constants/booking-status.const';
 
 export class BookingRepository extends BaseRepository {
   constructor() {
@@ -44,6 +40,25 @@ export class BookingRepository extends BaseRepository {
         worker_id: workerId,
         status: { [Op.in]: ACTIVE_BOOKING_STATUSES },
         start_time: { [Op.gt]: new Date() },
+      },
+      order: [['start_time', 'ASC']],
+      transaction,
+    });
+  }
+
+  /**
+   * Every occupied (PENDING/CONFIRMED/COMPLETED) booking among `workerIds` overlapping
+   * [windowStart, windowEnd) — the raw per-worker busy intervals BookingAvailabilityService
+   * sweeps to find windows where at least one worker is free.
+   */
+  async listOccupiedInWindow(workerIds, windowStart, windowEnd, { transaction } = {}) {
+    if (!workerIds.length) return [];
+    return this.get({
+      where: {
+        worker_id: { [Op.in]: workerIds },
+        status: { [Op.in]: OCCUPIED_BOOKING_STATUSES },
+        start_time: { [Op.lt]: windowEnd },
+        end_time: { [Op.gt]: windowStart },
       },
       order: [['start_time', 'ASC']],
       transaction,

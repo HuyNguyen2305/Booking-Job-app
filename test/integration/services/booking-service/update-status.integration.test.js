@@ -42,7 +42,7 @@ describe('BookingService.updateStatus (integration)', () => {
     return bookingService;
   }
 
-  it('transitioning to COMPLETED atomically persists the status and increments the worker\'s total_hours', async () => {
+  it("transitioning to COMPLETED atomically persists the status and increments the worker's total_hours", async () => {
     const worker = await Worker.create({ name: 'Completion Test Worker', is_active: true, total_hours: 0 });
     workerIds.push(worker.id);
 

@@ -18,7 +18,11 @@ describe('BaseRepository.bulkCreate (integration)', () => {
     rollback = ctx.rollback;
 
     await ctx.run(async (transaction) => {
-      const rows = [{ name: 'Base BulkCreate Worker A' }, { name: 'Base BulkCreate Worker B' }, { name: 'Base BulkCreate Worker C' }];
+      const rows = [
+        { name: 'Base BulkCreate Worker A' },
+        { name: 'Base BulkCreate Worker B' },
+        { name: 'Base BulkCreate Worker C' },
+      ];
 
       const created = await repository.bulkCreate(rows, { transaction });
       expect(created).toHaveLength(3);
@@ -27,7 +31,11 @@ describe('BaseRepository.bulkCreate (integration)', () => {
         where: { id: created.map((w) => w.id) },
         transaction,
       });
-      expect(stored.map((w) => w.name).sort()).toEqual(['Base BulkCreate Worker A', 'Base BulkCreate Worker B', 'Base BulkCreate Worker C']);
+      expect(stored.map((w) => w.name).sort()).toEqual([
+        'Base BulkCreate Worker A',
+        'Base BulkCreate Worker B',
+        'Base BulkCreate Worker C',
+      ]);
     });
   });
 });

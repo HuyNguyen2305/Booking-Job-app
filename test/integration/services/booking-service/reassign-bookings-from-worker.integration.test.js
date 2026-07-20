@@ -88,10 +88,20 @@ describe('BookingService.reassignBookingsFromWorker (integration)', () => {
 
     // A real, already-committed conflicting booking for candidateX — this is what the
     // real UPDATE inside the fix's SAVEPOINT must collide with and recover from.
-    const blockerOnX = await Booking.create({ worker_id: candidateX.id, customer_id: 999, ...slot, status: 'CONFIRMED' });
+    const blockerOnX = await Booking.create({
+      worker_id: candidateX.id,
+      customer_id: 999,
+      ...slot,
+      status: 'CONFIRMED',
+    });
     bookingIds.push(blockerOnX.id);
 
-    const bookingToReassign = await Booking.create({ worker_id: deactivating.id, customer_id: 1, ...slot, status: 'PENDING' });
+    const bookingToReassign = await Booking.create({
+      worker_id: deactivating.id,
+      customer_id: 1,
+      ...slot,
+      status: 'PENDING',
+    });
     bookingIds.push(bookingToReassign.id);
 
     const bookingService = buildService();

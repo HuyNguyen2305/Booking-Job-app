@@ -67,7 +67,10 @@ export class WorkerService {
       throw new NotFoundError('Worker not found');
     }
 
-    const { weekStart, weekEnd } = toBusinessLocalWeekBoundsUtc(DateTime.now().setZone(BUSINESS_TZ).toISO(), BUSINESS_TZ);
+    const { weekStart, weekEnd } = toBusinessLocalWeekBoundsUtc(
+      DateTime.now().setZone(BUSINESS_TZ).toISO(),
+      BUSINESS_TZ
+    );
     const hours_this_week = await this.workerRepository.getHoursThisWeek(id, { weekStart, weekEnd });
 
     return { ...worker.toJSON(), hours_this_week, weekly_hours_cap: WEEKLY_HOURS_CAP };

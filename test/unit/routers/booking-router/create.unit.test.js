@@ -53,7 +53,14 @@ describe('POST /api/bookings (router + controller + error handler)', () => {
   });
 
   it('returns 201 with reassigned/requested_worker_id when the service auto-assigned a different worker', async () => {
-    const createdBooking = { id: 1, ...validPayload, worker_id: 5, status: 'PENDING', reassigned: true, requested_worker_id: 1 };
+    const createdBooking = {
+      id: 1,
+      ...validPayload,
+      worker_id: 5,
+      status: 'PENDING',
+      reassigned: true,
+      requested_worker_id: 1,
+    };
     bookingServiceMock.createBooking.mockResolvedValue(createdBooking);
 
     const response = await app.inject({ method: 'POST', url: '/api/bookings', payload: validPayload });

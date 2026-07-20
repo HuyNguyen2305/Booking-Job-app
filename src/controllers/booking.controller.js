@@ -31,10 +31,12 @@ const LIST_SCOPE_BY_ROLE = {
 export class BookingController {
   constructor({ container }) {
     this.bookingService = container.resolve(SERVICE_KEYS.BOOKING);
+    this.bookingAvailabilityService = container.resolve(SERVICE_KEYS.BOOKING_AVAILABILITY);
   }
 
   async create(request, reply) {
-    const body = request.user?.role === ROLES.CUSTOMER ? { ...request.body, customer_id: request.user.id } : request.body;
+    const body =
+      request.user?.role === ROLES.CUSTOMER ? { ...request.body, customer_id: request.user.id } : request.body;
     const booking = await this.bookingService.createBooking(body);
     return reply.code(201).send({ success: true, message: 'Booking created', data: booking });
   }
@@ -115,6 +117,12 @@ export class BookingController {
       ? await this.bookingService.listByWorker(worker_id, { from, to, page, limit })
       : await this.bookingService.listByCustomer(customer_id, { from, to, page, limit });
     return reply.send({ success: true, message: 'Bookings retrieved', data: bookings });
+  }
+
+  async listAvailableSlots(request, reply) {
+    const { date, days, duration_minutes } = request.query;
+    const slots = await this.bookingAvailabilityService.listAvailableSlots(date, { days, duration_minutes });
+    return reply.send({ success: true, message: 'Available slots retrieved', data: slots });
   }
 
   async getById(request, reply) {

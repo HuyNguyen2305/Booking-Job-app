@@ -47,7 +47,7 @@ const availableWorkerSchema = {
 
 export const listAvailableWorkersSchema = {
   tags: ['Workers'],
-  summary: "List workers free in a time window",
+  summary: 'List workers free in a time window',
   description:
     'Returns active workers with no overlapping booking in [start, end), sorted ascending by total booked hours that business-local calendar day.',
   querystring: {
@@ -66,7 +66,8 @@ export const listAvailableWorkersSchema = {
 export const registerWorkerSchema = {
   tags: ['Workers'],
   summary: 'Register a new worker',
-  description: 'Admin-only staff onboarding. The initial password is chosen by the admin and relayed to the worker out-of-band.',
+  description:
+    'Admin-only staff onboarding. The initial password is chosen by the admin and relayed to the worker out-of-band.',
   body: {
     type: 'object',
     required: ['name', 'email', 'password'],

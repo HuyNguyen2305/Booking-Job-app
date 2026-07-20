@@ -51,9 +51,9 @@ describe('BookingService.createBooking', () => {
   };
 
   it('throws ValidationError when end_time is less than 30 minutes after start_time', async () => {
-    await expect(
-      service.createBooking({ ...payload, end_time: '2026-07-14T09:29:00+07:00' })
-    ).rejects.toBeInstanceOf(ValidationError);
+    await expect(service.createBooking({ ...payload, end_time: '2026-07-14T09:29:00+07:00' })).rejects.toBeInstanceOf(
+      ValidationError
+    );
     // checkSlotRules (timestamp-format validation) runs BEFORE this duration check —
     // regression guard: if checkSlotRules ran after instead, an offset-less/malformed
     // timestamp would be masked behind this generic duration error instead of surfacing
@@ -133,8 +133,16 @@ describe('BookingService.createBooking', () => {
 
     const result = await service.createBooking(payload); // payload requests worker_id: 1, which isn't in the active roster
 
-    expect(bookingAvailabilityServiceMock.isWorkerFree).not.toHaveBeenCalledWith(1, expect.anything(), expect.anything(), expect.anything());
-    expect(bookingRepositoryMock.create).toHaveBeenCalledWith(expect.objectContaining({ worker_id: 2 }), expect.anything());
+    expect(bookingAvailabilityServiceMock.isWorkerFree).not.toHaveBeenCalledWith(
+      1,
+      expect.anything(),
+      expect.anything(),
+      expect.anything()
+    );
+    expect(bookingRepositoryMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ worker_id: 2 }),
+      expect.anything()
+    );
     expect(result.reassigned).toBe(true);
     expect(result.requested_worker_id).toBe(1);
   });

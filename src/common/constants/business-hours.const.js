@@ -10,3 +10,7 @@ if (!IANAZone.isValidZone(BUSINESS_TZ)) {
 export const WORK_START_HOUR = 9;
 export const WORK_END_HOUR = 17;
 export const WEEKLY_HOURS_CAP = 40;
+
+// Upper bound on `days` for BookingAvailabilityService.listAvailableSlots — a month is
+// plenty for a booking calendar view and keeps the occupied-bookings query bounded.
+export const MAX_AVAILABILITY_DAYS = 31;

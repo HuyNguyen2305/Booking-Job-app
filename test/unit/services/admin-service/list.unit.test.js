@@ -22,7 +22,12 @@ describe('AdminService.list', () => {
 
     const result = await service.list({ page: 1, limit: 20 });
 
-    expect(adminRepositoryMock.pagination).toHaveBeenCalledWith({ where: {}, order: [['id', 'ASC']], page: 1, limit: 20 });
+    expect(adminRepositoryMock.pagination).toHaveBeenCalledWith({
+      where: {},
+      order: [['id', 'ASC']],
+      page: 1,
+      limit: 20,
+    });
     expect(result).toBe(paginated);
   });
 

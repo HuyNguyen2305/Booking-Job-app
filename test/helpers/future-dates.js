@@ -23,3 +23,13 @@ export function nextTuesdayAt(hour, minute = 0, daysAhead = 7) {
 export function nextSaturdayAt(hour, minute = 0, daysAhead = 7) {
   return nextWeekday(6, daysAhead).set({ hour, minute, second: 0, millisecond: 0 }).toISO();
 }
+
+/** Business-local calendar date (YYYY-MM-DD) of the next Tuesday, for date-only (not date-time) params. */
+export function nextTuesdayDate(daysAhead = 7) {
+  return nextWeekday(2, daysAhead).toISODate();
+}
+
+/** Business-local calendar date (YYYY-MM-DD) of the next Saturday, for date-only (not date-time) params. */
+export function nextSaturdayDate(daysAhead = 7) {
+  return nextWeekday(6, daysAhead).toISODate();
+}

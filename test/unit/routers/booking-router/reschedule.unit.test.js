@@ -69,7 +69,11 @@ describe('PATCH /api/bookings/:id (router + controller + error handler)', () => 
   });
 
   it('returns 400 schema validation error when start_time is missing, without calling the service', async () => {
-    const response = await app.inject({ method: 'PATCH', url: '/api/bookings/1', payload: { end_time: payload.end_time } });
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/bookings/1',
+      payload: { end_time: payload.end_time },
+    });
 
     expect(response.statusCode).toBe(400);
     expect(bookingServiceMock.rescheduleBooking).not.toHaveBeenCalled();

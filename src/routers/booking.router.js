@@ -7,6 +7,7 @@ import {
   rescheduleBookingSchema,
   reassignBookingSchema,
   listBookingsSchema,
+  listAvailableSlotsSchema,
   getBookingSchema,
   cancelBookingSchema,
   autoCompleteBookingsSchema,
@@ -62,6 +63,15 @@ class BookingRouter {
       config: { responseFormat: 'standard' },
       preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN, ROLES.WORKER, ROLES.CUSTOMER)],
       handler: this.bookingController.list.bind(this.bookingController),
+    });
+
+    this.fastify.route({
+      method: 'GET',
+      url: '/api/bookings/available-slots',
+      schema: listAvailableSlotsSchema,
+      config: { responseFormat: 'standard' },
+      preValidation: [this.fastify.authenticate, requireRole(ROLES.ADMIN, ROLES.WORKER, ROLES.CUSTOMER)],
+      handler: this.bookingController.listAvailableSlots.bind(this.bookingController),
     });
 
     this.fastify.route({

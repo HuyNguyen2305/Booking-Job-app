@@ -27,7 +27,11 @@ describe('BaseRepository.pagination (integration)', () => {
     rollback = ctx.rollback;
 
     await ctx.run(async (transaction) => {
-      const result = await repository.pagination({ where: { id: [9401, 9402, 9403] }, order: [['id', 'ASC']], transaction });
+      const result = await repository.pagination({
+        where: { id: [9401, 9402, 9403] },
+        order: [['id', 'ASC']],
+        transaction,
+      });
 
       expect(result.rows.map((w) => w.id)).toEqual([9401, 9402, 9403]);
       expect(result.page).toBe(1);
@@ -69,7 +73,9 @@ describe('BaseRepository.pagination (integration)', () => {
   });
 
   it('returns an empty page past the last one, without error', async () => {
-    const ctx = await seedWithTransaction([{ table: 'workers', rows: [{ id: 9421, name: 'Base Pagination Worker 9421' }] }]);
+    const ctx = await seedWithTransaction([
+      { table: 'workers', rows: [{ id: 9421, name: 'Base Pagination Worker 9421' }] },
+    ]);
     rollback = ctx.rollback;
 
     await ctx.run(async (transaction) => {

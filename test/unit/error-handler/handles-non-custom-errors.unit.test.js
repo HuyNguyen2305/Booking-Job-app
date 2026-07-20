@@ -43,7 +43,9 @@ describe('Global error handler: non-CustomError branch', () => {
   });
 
   it('collapses an error with a 5xx statusCode into a generic 500, hiding the real message', async () => {
-    bookingServiceMock.createBooking.mockRejectedValueOnce(Object.assign(new Error('upstream failed'), { statusCode: 502 }));
+    bookingServiceMock.createBooking.mockRejectedValueOnce(
+      Object.assign(new Error('upstream failed'), { statusCode: 502 })
+    );
 
     const response = await app.inject({ method: 'POST', url: '/api/bookings', payload: validPayload });
 

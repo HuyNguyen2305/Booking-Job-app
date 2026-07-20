@@ -29,7 +29,7 @@ describe('CustomerService.remove', () => {
     expect(customerRepositoryMock.update).not.toHaveBeenCalled();
   });
 
-  it('cancels the customer\'s bookings, deactivates the customer, and merges both results', async () => {
+  it("cancels the customer's bookings, deactivates the customer, and merges both results", async () => {
     customerRepositoryMock.getOne.mockResolvedValue({ id: 1, name: 'Alice', is_active: true });
     bookingServiceMock.cancelBookingsForCustomer.mockResolvedValue({
       cancelled_booking_ids: [10, 11],

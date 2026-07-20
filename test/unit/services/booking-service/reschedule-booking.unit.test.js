@@ -55,7 +55,7 @@ describe('BookingService.rescheduleBooking', () => {
     expect(bookingAvailabilityServiceMock.checkSlotRules).not.toHaveBeenCalled();
   });
 
-  it('throws ConflictError with PAST_BOOKING_TIME when the booking\'s current start_time has already passed', async () => {
+  it("throws ConflictError with PAST_BOOKING_TIME when the booking's current start_time has already passed", async () => {
     // The worker is presumably already working the job (or done) once its original
     // start_time has passed — rescheduling it to a new time at that point doesn't
     // make sense, regardless of what new window is requested.
@@ -224,7 +224,7 @@ describe('BookingService.rescheduleBooking', () => {
     expect(bookingRepositoryMock.update).not.toHaveBeenCalled();
   });
 
-  it('throws ConflictError with WORKER_UNAVAILABLE when the booking\'s current worker is no longer an active registered worker and no other active workers exist', async () => {
+  it("throws ConflictError with WORKER_UNAVAILABLE when the booking's current worker is no longer an active registered worker and no other active workers exist", async () => {
     // Regression: a worker can be deactivated/removed after a booking was made
     // against them (no hard FK). Rescheduling must not silently keep assigning to
     // a worker_id that is no longer active just because no overlap exists for it.

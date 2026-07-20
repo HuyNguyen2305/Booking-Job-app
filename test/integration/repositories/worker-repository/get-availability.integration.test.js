@@ -87,11 +87,7 @@ describe('WorkerRepository.getAvailability (integration)', () => {
     rollback = ctx.rollback;
 
     await ctx.run(async (transaction) => {
-      const rows = await repository.getAvailability(
-        [7004, 7005],
-        { ...queryWindow, ...dayBounds },
-        { transaction }
-      );
+      const rows = await repository.getAvailability([7004, 7005], { ...queryWindow, ...dayBounds }, { transaction });
 
       const byWorker = Object.fromEntries(rows.map((r) => [r.worker_id, r]));
       expect(byWorker[7004]).toEqual({ worker_id: 7004, has_overlap: true, booked_hours: 3 });

@@ -40,11 +40,13 @@ describe('AdminService.create', () => {
     passwordUtilMock.hashPassword.mockResolvedValue('hashed-secret');
     adminRepositoryMock.create.mockRejectedValue({ parent: { code: '23505' } });
 
-    await expect(service.create({ name: 'Root', email: 'root@example.com', password: 'secret' })).rejects.toMatchObject({
-      code: ACCOUNT_ERROR_CODES.EMAIL_ALREADY_REGISTERED,
-    });
-    await expect(service.create({ name: 'Root', email: 'root@example.com', password: 'secret' })).rejects.toBeInstanceOf(
-      ConflictError
+    await expect(service.create({ name: 'Root', email: 'root@example.com', password: 'secret' })).rejects.toMatchObject(
+      {
+        code: ACCOUNT_ERROR_CODES.EMAIL_ALREADY_REGISTERED,
+      }
     );
+    await expect(
+      service.create({ name: 'Root', email: 'root@example.com', password: 'secret' })
+    ).rejects.toBeInstanceOf(ConflictError);
   });
 });

@@ -12,7 +12,7 @@ describe('WorkerRepository.incrementTotalHours (integration)', () => {
     rollback = undefined;
   });
 
-  it('adds the given hours on top of the worker\'s existing total_hours', async () => {
+  it("adds the given hours on top of the worker's existing total_hours", async () => {
     const ctx = await seedWithTransaction([
       { table: 'workers', rows: [{ id: 7001, name: 'Worker 7001', is_active: true, total_hours: 10 }] },
     ]);

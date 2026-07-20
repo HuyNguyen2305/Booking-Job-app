@@ -26,9 +26,7 @@ describe('BookingService.autoCompletePastBookings', () => {
 
   it('completes every due booking via updateStatus', async () => {
     bookingRepositoryMock.listPastConfirmed.mockResolvedValue([{ id: 1 }, { id: 2 }]);
-    const updateStatusSpy = jest
-      .spyOn(service, 'updateStatus')
-      .mockResolvedValue({ status: BOOKING_STATUS.COMPLETED });
+    const updateStatusSpy = jest.spyOn(service, 'updateStatus').mockResolvedValue({ status: BOOKING_STATUS.COMPLETED });
 
     const result = await service.autoCompletePastBookings();
 

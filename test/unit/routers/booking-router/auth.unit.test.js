@@ -26,7 +26,6 @@ const { ROLES } = await import('#constants/role.const');
 
 describe('Booking router auth enforcement (NODE_ENV=production)', () => {
   let app;
-  let adminToken;
   let workerToken;
   let customerToken;
   const originalNodeEnv = process.env.NODE_ENV;
@@ -38,7 +37,6 @@ describe('Booking router auth enforcement (NODE_ENV=production)', () => {
     app = await buildApp({ logger: false });
     await app.ready();
 
-    adminToken = signToken({ id: 1, role: ROLES.ADMIN });
     workerToken = signToken({ id: 2, role: ROLES.WORKER });
     customerToken = signToken({ id: 5, role: ROLES.CUSTOMER });
   });
@@ -63,7 +61,12 @@ describe('Booking router auth enforcement (NODE_ENV=production)', () => {
       method: 'POST',
       url: '/api/bookings',
       headers: { authorization: `Bearer ${workerToken}` },
-      payload: { worker_id: 2, customer_id: 5, start_time: '2026-08-03T02:00:00.000Z', end_time: '2026-08-03T04:00:00.000Z' },
+      payload: {
+        worker_id: 2,
+        customer_id: 5,
+        start_time: '2026-08-03T02:00:00.000Z',
+        end_time: '2026-08-03T04:00:00.000Z',
+      },
     });
     expect(response.statusCode).toBe(403);
     expect(bookingServiceMock.createBooking).not.toHaveBeenCalled();
@@ -85,9 +88,7 @@ describe('Booking router auth enforcement (NODE_ENV=production)', () => {
     });
 
     expect(response.statusCode).toBe(201);
-    expect(bookingServiceMock.createBooking).toHaveBeenCalledWith(
-      expect.objectContaining({ customer_id: 5 })
-    );
+    expect(bookingServiceMock.createBooking).toHaveBeenCalledWith(expect.objectContaining({ customer_id: 5 }));
   });
 
   it('GET /api/bookings/:id returns 200 when the WORKER token matches the booking worker_id', async () => {
@@ -237,7 +238,7 @@ describe('Booking router auth enforcement (NODE_ENV=production)', () => {
     expect(response.statusCode).toBe(409);
   });
 
-  it('PATCH /api/bookings/:id/status returns 403 when a non-owning WORKER targets PENDING (can\'t probe an unrelated booking)', async () => {
+  it("PATCH /api/bookings/:id/status returns 403 when a non-owning WORKER targets PENDING (can't probe an unrelated booking)", async () => {
     bookingServiceMock.getById.mockResolvedValue({ id: 10, worker_id: 999, customer_id: 5 });
 
     const response = await app.inject({
@@ -251,7 +252,7 @@ describe('Booking router auth enforcement (NODE_ENV=production)', () => {
     expect(bookingServiceMock.updateStatus).not.toHaveBeenCalled();
   });
 
-  it('PATCH /api/bookings/:id/status returns 403 when a non-owning CUSTOMER targets PENDING (can\'t probe an unrelated booking)', async () => {
+  it("PATCH /api/bookings/:id/status returns 403 when a non-owning CUSTOMER targets PENDING (can't probe an unrelated booking)", async () => {
     bookingServiceMock.getById.mockResolvedValue({ id: 10, worker_id: 2, customer_id: 999 });
 
     const response = await app.inject({
@@ -298,7 +299,13 @@ describe('Booking router auth enforcement (NODE_ENV=production)', () => {
   });
 
   it('GET /api/bookings never calls listByWorker for a CUSTOMER caller, even with a valid own customer_id present', async () => {
-    bookingServiceMock.listByCustomer.mockResolvedValue({ rows: [{ id: 1 }], count: 1, page: 1, limit: 20, totalPages: 1 });
+    bookingServiceMock.listByCustomer.mockResolvedValue({
+      rows: [{ id: 1 }],
+      count: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    });
 
     const response = await app.inject({
       method: 'GET',
@@ -322,8 +329,14 @@ describe('Booking router auth enforcement (NODE_ENV=production)', () => {
     expect(bookingServiceMock.listByCustomer).not.toHaveBeenCalled();
   });
 
-  it('GET /api/bookings with no query params returns the CUSTOMER caller\'s own bookings', async () => {
-    bookingServiceMock.listByCustomer.mockResolvedValue({ rows: [{ id: 1 }], count: 1, page: 1, limit: 20, totalPages: 1 });
+  it("GET /api/bookings with no query params returns the CUSTOMER caller's own bookings", async () => {
+    bookingServiceMock.listByCustomer.mockResolvedValue({
+      rows: [{ id: 1 }],
+      count: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    });
 
     const response = await app.inject({
       method: 'GET',
@@ -335,8 +348,14 @@ describe('Booking router auth enforcement (NODE_ENV=production)', () => {
     expect(bookingServiceMock.listByCustomer).toHaveBeenCalledWith(5, expect.anything());
   });
 
-  it('GET /api/bookings with no query params returns the WORKER caller\'s own bookings', async () => {
-    bookingServiceMock.listByWorker.mockResolvedValue({ rows: [{ id: 1 }], count: 1, page: 1, limit: 20, totalPages: 1 });
+  it("GET /api/bookings with no query params returns the WORKER caller's own bookings", async () => {
+    bookingServiceMock.listByWorker.mockResolvedValue({
+      rows: [{ id: 1 }],
+      count: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    });
 
     const response = await app.inject({
       method: 'GET',

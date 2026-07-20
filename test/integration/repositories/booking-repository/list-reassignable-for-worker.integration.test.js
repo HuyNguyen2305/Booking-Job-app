@@ -19,7 +19,11 @@ describe('BookingRepository.listReassignableForWorker (integration)', () => {
     // timestamps (not the fixture's own fixed 2026-08-xx dates) since this test's inclusion
     // assertions specifically depend on them being genuinely in the future whenever this
     // test actually runs — a fixed date would eventually go stale as real time passes it.
-    const pendingFuture = { ...fixtures.workerOnePending, start_time: nextTuesdayAt(9, 0), end_time: nextTuesdayAt(10, 0) };
+    const pendingFuture = {
+      ...fixtures.workerOnePending,
+      start_time: nextTuesdayAt(9, 0),
+      end_time: nextTuesdayAt(10, 0),
+    };
     const confirmedFuture = {
       ...fixtures.workerOneConfirmed,
       start_time: nextTuesdayAt(11, 0),
@@ -29,7 +33,13 @@ describe('BookingRepository.listReassignableForWorker (integration)', () => {
     const ctx = await seedWithTransaction([
       {
         table: 'bookings',
-        rows: [pendingFuture, confirmedFuture, fixtures.workerOneCancelled, fixtures.workerOneCompleted, fixtures.workerOnePastPending],
+        rows: [
+          pendingFuture,
+          confirmedFuture,
+          fixtures.workerOneCancelled,
+          fixtures.workerOneCompleted,
+          fixtures.workerOnePastPending,
+        ],
       },
     ]);
     rollback = ctx.rollback;

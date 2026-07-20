@@ -42,7 +42,9 @@ describe('WorkerService.register', () => {
     passwordUtilMock.hashPassword.mockResolvedValue('hashed-secret');
     workerRepositoryMock.create.mockRejectedValue({ parent: { code: '23505' } });
 
-    await expect(service.register({ name: 'Alice', email: 'alice@example.com', password: 'secret' })).rejects.toMatchObject({
+    await expect(
+      service.register({ name: 'Alice', email: 'alice@example.com', password: 'secret' })
+    ).rejects.toMatchObject({
       code: ACCOUNT_ERROR_CODES.EMAIL_ALREADY_REGISTERED,
     });
     await expect(

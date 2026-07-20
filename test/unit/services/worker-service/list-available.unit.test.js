@@ -22,9 +22,9 @@ describe('WorkerService.listAvailable', () => {
   const validRange = { start: '2026-07-14T09:00:00+07:00', end: '2026-07-14T10:00:00+07:00' };
 
   it('throws ValidationError with INVALID_TIMESTAMP_FORMAT when start lacks a UTC offset', async () => {
-    await expect(service.listAvailable({ start: '2026-07-14T09:00:00', end: validRange.end })).rejects.toMatchObject(
-      { code: BOOKING_ERROR_CODES.INVALID_TIMESTAMP_FORMAT }
-    );
+    await expect(service.listAvailable({ start: '2026-07-14T09:00:00', end: validRange.end })).rejects.toMatchObject({
+      code: BOOKING_ERROR_CODES.INVALID_TIMESTAMP_FORMAT,
+    });
   });
 
   it('excludes workers with an overlapping booking and sorts the rest ascending by booked hours', async () => {

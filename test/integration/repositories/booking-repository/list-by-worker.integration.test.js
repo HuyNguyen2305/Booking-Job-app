@@ -17,7 +17,12 @@ describe('BookingRepository.listByWorker (integration)', () => {
     const ctx = await seedWithTransaction([
       {
         table: 'bookings',
-        rows: [fixtures.workerOneLater, fixtures.workerOnePending, fixtures.workerOneConfirmed, fixtures.workerTwoPending],
+        rows: [
+          fixtures.workerOneLater,
+          fixtures.workerOnePending,
+          fixtures.workerOneConfirmed,
+          fixtures.workerTwoPending,
+        ],
       },
     ]);
     rollback = ctx.rollback;

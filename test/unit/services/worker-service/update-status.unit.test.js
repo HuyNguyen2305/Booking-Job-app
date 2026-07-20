@@ -61,7 +61,11 @@ describe('WorkerService.updateStatus', () => {
     const result = await service.updateStatus(1, false);
 
     expect(bookingServiceMock.reassignBookingsFromWorker).toHaveBeenCalledWith(1, { transaction: 'mock-transaction' });
-    expect(workerRepositoryMock.update).toHaveBeenCalledWith({ id: 1 }, { is_active: false }, { transaction: 'mock-transaction' });
+    expect(workerRepositoryMock.update).toHaveBeenCalledWith(
+      { id: 1 },
+      { is_active: false },
+      { transaction: 'mock-transaction' }
+    );
     expect(result).toEqual({ id: 1, name: 'Alice', is_active: false, reassigned_bookings: reassignments });
   });
 
@@ -73,7 +77,9 @@ describe('WorkerService.updateStatus', () => {
       })
     );
 
-    await expect(service.updateStatus(1, false)).rejects.toMatchObject({ code: BOOKING_ERROR_CODES.WORKER_UNAVAILABLE });
+    await expect(service.updateStatus(1, false)).rejects.toMatchObject({
+      code: BOOKING_ERROR_CODES.WORKER_UNAVAILABLE,
+    });
     expect(workerRepositoryMock.update).not.toHaveBeenCalled();
   });
 });

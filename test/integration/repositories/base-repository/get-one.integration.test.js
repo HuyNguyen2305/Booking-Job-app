@@ -14,7 +14,9 @@ describe('BaseRepository.getOne (integration)', () => {
   });
 
   it('returns the single row matching the where clause', async () => {
-    const ctx = await seedWithTransaction([{ table: 'workers', rows: [{ id: 9101, name: 'Base GetOne Worker 9101' }] }]);
+    const ctx = await seedWithTransaction([
+      { table: 'workers', rows: [{ id: 9101, name: 'Base GetOne Worker 9101' }] },
+    ]);
     rollback = ctx.rollback;
 
     await ctx.run(async (transaction) => {

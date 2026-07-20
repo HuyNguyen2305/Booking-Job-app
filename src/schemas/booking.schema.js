@@ -1,5 +1,6 @@
 import { buildSuccessResponse, buildPaginatedResponse } from '#common-schemas/response.schema';
-import { BOOKING_STATUS_VALUES } from '#constants/booking-status.const';
+import { BOOKING_STATUS_VALUES, MIN_BOOKING_DURATION_MINUTES } from '#constants/booking-status.const';
+import { MAX_AVAILABILITY_DAYS } from '#constants/business-hours.const';
 
 const bookingSchema = {
   type: 'object',
@@ -132,6 +133,38 @@ export const listBookingsSchema = {
   },
 };
 
+export const listAvailableSlotsSchema = {
+  tags: ['Bookings'],
+  summary: 'List open booking windows across a date range',
+  description:
+    'Returns every window within business hours (09:00-17:00 business-local) across the `days` calendar days starting at `date` (default 1, i.e. just that one day) at least `duration_minutes` long where at least one active worker has no occupied booking, so a booking of that duration could actually be created there. A window never spans across days. Non-bookable days (weekend, holiday, or already fully passed) contribute nothing rather than an error.',
+  querystring: {
+    type: 'object',
+    required: ['date'],
+    properties: {
+      date: { type: 'string', format: 'date' },
+      days: { type: 'integer', minimum: 1, maximum: MAX_AVAILABILITY_DAYS, default: 1 },
+      duration_minutes: {
+        type: 'integer',
+        minimum: MIN_BOOKING_DURATION_MINUTES,
+        default: MIN_BOOKING_DURATION_MINUTES,
+      },
+    },
+  },
+  response: {
+    200: buildSuccessResponse({
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          start_time: { type: 'string', format: 'date-time' },
+          end_time: { type: 'string', format: 'date-time' },
+        },
+      },
+    }),
+  },
+};
+
 export const getBookingSchema = {
   tags: ['Bookings'],
   summary: 'Get a booking by id',
@@ -151,7 +184,7 @@ export const autoCompleteBookingsSchema = {
   tags: ['Bookings'],
   summary: 'Auto-complete CONFIRMED bookings whose end_time has passed',
   description:
-    'Sweeps every CONFIRMED booking whose end_time has already passed and transitions it to COMPLETED, adding its duration to the assigned worker\'s total_hours. Intended for manual/ops triggering; the same logic also runs automatically on a timer.',
+    "Sweeps every CONFIRMED booking whose end_time has already passed and transitions it to COMPLETED, adding its duration to the assigned worker's total_hours. Intended for manual/ops triggering; the same logic also runs automatically on a timer.",
   response: {
     200: buildSuccessResponse({
       type: 'object',

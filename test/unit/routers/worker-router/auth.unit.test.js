@@ -90,7 +90,12 @@ describe('Worker router auth enforcement (NODE_ENV=production)', () => {
   });
 
   it('POST /api/workers/register returns 201 without a bearer token (public self-signup)', async () => {
-    workerServiceMock.selfRegister.mockResolvedValue({ id: 3, name: 'New Guy', email: 'new@example.com', is_active: false });
+    workerServiceMock.selfRegister.mockResolvedValue({
+      id: 3,
+      name: 'New Guy',
+      email: 'new@example.com',
+      is_active: false,
+    });
 
     const response = await app.inject({
       method: 'POST',

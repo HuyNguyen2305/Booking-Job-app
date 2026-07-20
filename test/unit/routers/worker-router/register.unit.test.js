@@ -78,7 +78,13 @@ describe('POST /api/workers and GET /api/workers (router + controller)', () => {
   });
 
   it('GET /api/workers returns 200 with a paginated roster', async () => {
-    const paginated = { rows: [{ id: 1, name: 'Alice', is_active: true }], count: 1, page: 1, limit: 20, totalPages: 1 };
+    const paginated = {
+      rows: [{ id: 1, name: 'Alice', is_active: true }],
+      count: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    };
     workerServiceMock.list.mockResolvedValue(paginated);
 
     const response = await app.inject({ method: 'GET', url: '/api/workers' });

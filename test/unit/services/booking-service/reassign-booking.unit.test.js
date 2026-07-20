@@ -89,7 +89,11 @@ describe('BookingService.reassignBooking', () => {
       slot.end_time.toISOString(),
       { transaction: 'mock-transaction', excludeId: 1 }
     );
-    expect(bookingRepositoryMock.update).toHaveBeenCalledWith({ id: 1 }, { worker_id: 6 }, { transaction: 'mock-transaction' });
+    expect(bookingRepositoryMock.update).toHaveBeenCalledWith(
+      { id: 1 },
+      { worker_id: 6 },
+      { transaction: 'mock-transaction' }
+    );
     expect(result.reassigned).toBe(true);
     expect(result.requested_worker_id).toBe(5);
   });

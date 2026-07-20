@@ -86,7 +86,11 @@ describe('PATCH /api/customers/:id (router + controller + error handler)', () =>
   });
 
   it('returns 400 schema validation error for a non-integer id param, without calling the service', async () => {
-    const response = await app.inject({ method: 'PATCH', url: '/api/customers/not-a-number', payload: { name: 'Bob' } });
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/api/customers/not-a-number',
+      payload: { name: 'Bob' },
+    });
 
     expect(response.statusCode).toBe(400);
     expect(customerServiceMock.updateProfile).not.toHaveBeenCalled();

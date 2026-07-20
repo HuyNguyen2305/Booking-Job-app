@@ -41,7 +41,7 @@ describe('BookingService.autoCompletePastBookings (integration)', () => {
     return bookingService;
   }
 
-  it('completes a past-due CONFIRMED booking and adds its duration to the worker\'s total_hours', async () => {
+  it("completes a past-due CONFIRMED booking and adds its duration to the worker's total_hours", async () => {
     const worker = await Worker.create({ name: 'Auto Complete Test Worker', is_active: true, total_hours: 0 });
     workerIds.push(worker.id);
 

@@ -14,7 +14,8 @@ const adminSchema = {
 export const createAdminSchema = {
   tags: ['Admins'],
   summary: 'Create a new admin',
-  description: 'Admin-only account management. The initial password is chosen by the creating admin and relayed out-of-band.',
+  description:
+    'Admin-only account management. The initial password is chosen by the creating admin and relayed out-of-band.',
   body: {
     type: 'object',
     required: ['name', 'email', 'password'],
@@ -67,7 +68,8 @@ export const getAdminSchema = {
 export const updateAdminStatusSchema = {
   tags: ['Admins'],
   summary: 'Activate or deactivate an admin',
-  description: 'An admin may not deactivate their own account (guards against losing all HTTP access with no CLI/DB path back in).',
+  description:
+    'An admin may not deactivate their own account (guards against losing all HTTP access with no CLI/DB path back in).',
   params: {
     type: 'object',
     required: ['id'],

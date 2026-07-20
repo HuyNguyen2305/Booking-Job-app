@@ -413,7 +413,11 @@ export class BookingService {
           });
           if (!free) throw SKIP_CANDIDATE;
 
-          await this.bookingRepository.update({ id: booking.id }, { worker_id: candidateId }, { transaction: savepoint });
+          await this.bookingRepository.update(
+            { id: booking.id },
+            { worker_id: candidateId },
+            { transaction: savepoint }
+          );
           return candidateId;
         },
         { transaction }
@@ -450,7 +454,9 @@ export class BookingService {
         // Two distinct call shapes, not one normalized to `options=undefined` — kept
         // separate so callers/mocks that only expect the plain single-callback form
         // (the common, no-outer-transaction case) don't have to handle a two-arg call.
-        return await (transaction ? sequelize.transaction({ transaction }, runAttempt) : sequelize.transaction(runAttempt));
+        return await (transaction
+          ? sequelize.transaction({ transaction }, runAttempt)
+          : sequelize.transaction(runAttempt));
       } catch (err) {
         if (err === SKIP_CANDIDATE || isExclusionConstraintError(err)) continue;
         throw err;

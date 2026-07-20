@@ -129,7 +129,7 @@ describe('BookingService.updateStatus', () => {
       end_time: '2026-07-14T11:30:00.000Z', // 2.5 hours
     };
 
-    it('completes the booking and atomically adds its duration to the worker\'s total_hours in one transaction', async () => {
+    it("completes the booking and atomically adds its duration to the worker's total_hours in one transaction", async () => {
       bookingRepositoryMock.getOne.mockResolvedValue(booking);
       const updatedBooking = { id: 1, status: BOOKING_STATUS.COMPLETED };
       bookingRepositoryMock.updateStatusIfUnchanged.mockResolvedValue(updatedBooking);
@@ -142,7 +142,9 @@ describe('BookingService.updateStatus', () => {
         BOOKING_STATUS.COMPLETED,
         { transaction: 'mock-transaction' }
       );
-      expect(workerRepositoryMock.incrementTotalHours).toHaveBeenCalledWith(7, 2.5, { transaction: 'mock-transaction' });
+      expect(workerRepositoryMock.incrementTotalHours).toHaveBeenCalledWith(7, 2.5, {
+        transaction: 'mock-transaction',
+      });
       expect(result).toBe(updatedBooking);
     });
 
